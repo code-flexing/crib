@@ -1,0 +1,232 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --safecrib-black: #0b0c0e;
+  --safecrib-green: #0c7355;
+  --safecrib-white: #ffffff;
+
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+html {
+  scroll-padding-top: var(--safe-area-top);
+}
+
+body {
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--safecrib-green);
+  color: var(--safecrib-white);
+}
+
+:focus-visible {
+  outline: 2px solid var(--safecrib-green);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* SafeCrib loader                                                        */
+/* Concept: trust -> connection -> home. Two diagonals and a base line    */
+/* draw themselves in sequence, three nodes settle in as each line        */
+/* completes, then the whole mark holds a single quiet breathing pulse.   */
+/* ---------------------------------------------------------------------- */
+
+.safecrib-loader {
+  color: var(--safecrib-green);
+  overflow: visible;
+}
+
+.safecrib-loader__line {
+  /* Path length of the two diagonals (M8 34 L24 10 / M24 10 L40 34) is
+     sqrt(16² + 24²) ≈ 28.84; 29 keeps the draw-in reaching exactly 0 instead
+     of finishing early against an oversized dasharray. */
+  stroke-dasharray: 29;
+  stroke-dashoffset: 29;
+  animation: safecrib-draw-diagonal 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+.safecrib-loader__line--left {
+  animation-delay: 0s;
+}
+
+.safecrib-loader__line--right {
+  animation-delay: 0.35s;
+}
+
+.safecrib-loader__line--base {
+  /* M8 34 L40 34 is exactly 32 units long — its own dasharray, so it needs
+     its own keyframes rather than reusing the diagonals' 29-unit values
+     (which left a sliver of this line visible even at "hidden"). */
+  stroke-dasharray: 32;
+  stroke-dashoffset: 32;
+  animation: safecrib-draw-base 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  animation-delay: 0.7s;
+}
+
+.safecrib-loader__node {
+  opacity: 0;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: safecrib-settle 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+.safecrib-loader__node--apex {
+  animation-delay: 0.25s;
+}
+
+.safecrib-loader__node--left {
+  animation-delay: 0.95s;
+}
+
+.safecrib-loader__node--right {
+  animation-delay: 1.05s;
+}
+
+@keyframes safecrib-draw-diagonal {
+  0% {
+    stroke-dashoffset: 29;
+    opacity: 0.35;
+  }
+  30%,
+  75% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  92%,
+  100% {
+    stroke-dashoffset: 29;
+    opacity: 0.35;
+  }
+}
+
+@keyframes safecrib-draw-base {
+  0% {
+    stroke-dashoffset: 32;
+    opacity: 0.35;
+  }
+  30%,
+  75% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  92%,
+  100% {
+    stroke-dashoffset: 32;
+    opacity: 0.35;
+  }
+}
+
+@keyframes safecrib-settle {
+  0%,
+  10% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  25%,
+  80% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  92%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+.safecrib-loader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--safecrib-white);
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .safecrib-loader__line,
+  .safecrib-loader__node {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Modal                                                                  */
+/* ---------------------------------------------------------------------- */
+
+.safecrib-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(11, 12, 14, 0.72);
+  padding: 1rem;
+  padding-bottom: calc(1rem + var(--safe-area-bottom));
+  animation: safecrib-fade 0.15s ease-out;
+}
+
+@media (min-width: 640px) {
+  .safecrib-modal-backdrop {
+    align-items: center;
+  }
+}
+
+.safecrib-modal {
+  width: 100%;
+  max-width: 26rem;
+  background: var(--safecrib-white);
+  border: 1px solid rgba(11, 12, 14, 0.12);
+  border-radius: 4px;
+  padding: 1.75rem;
+  animation: safecrib-rise 0.18s ease-out;
+}
+
+@keyframes safecrib-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes safecrib-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .safecrib-modal-backdrop,
+  .safecrib-modal {
+    animation: none;
+  }
+}

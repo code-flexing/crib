@@ -6,7 +6,7 @@
 // responses, authentication, or user data — that will be added once the
 // backend exists, and must never cache anything sensitive.
 
-const CACHE_NAME = "safecrib-shell-v1";
+const CACHE_NAME = "safecrib-shell-v2";
 const APP_SHELL = ["/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -39,7 +39,21 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => cached ?? fetch(request))
-  );
+  const url = new URL(request.url);
+  const isDocumentRequest = request.mode === "navigate" || url.pathname === "/manifest.webmanifest";
+
+  if (isDocumentRequest) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const responseCopy = response.clone();
+          void caches.open(CACHE_NAME).then((cache) => cache.put(request, responseCopy));
+          return response;
+        })
+        .catch(() => caches.match(request).then((cached) => cached ?? Response.error()))
+    );
+    return;
+  }
+
+  event.respondWith(caches.match(request).then((cached) => cached ?? fetch(request)));
 });

@@ -66,10 +66,24 @@ export function registerServiceWorker(): void {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // Registration failures shouldn't break the app; the page still works
-      // fully without the service worker.
-    });
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let hasReloadedForUpdate = false;
+
+    if (hadController) {
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (hasReloadedForUpdate) return;
+        hasReloadedForUpdate = true;
+        window.location.reload();
+      });
+    }
+
+    void navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => registration.update())
+      .catch(() => {
+        // Registration failures shouldn't break the app; the page still works
+        // fully without the service worker.
+      });
   });
 }
 

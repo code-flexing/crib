@@ -81,7 +81,7 @@ export function NotificationForm() {
                 setEmail(event.target.value);
                 if (state !== "idle" && state !== "submitting") setState("idle");
               }}
-              placeholder="you@university.ac.uk"
+              placeholder="you@university.edu.ng"
               aria-invalid={state === "invalid" || state === "error"}
               aria-describedby={state === "invalid" || state === "error" ? `${inputId}-message` : undefined}
               className="mt-2 w-full rounded-[3px] border border-black/20 bg-transparent px-4 py-3 text-sm text-safecrib-black placeholder:text-black/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green"

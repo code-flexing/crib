@@ -49,7 +49,7 @@ export function NetworkMonitor() {
     setSettingsMessage("");
 
     try {
-      const response = await fetch("/manifest.webmanifest", {
+      const response = await fetch(`/manifest.webmanifest?network-check=${Date.now()}`, {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" },
       });

@@ -10,8 +10,8 @@ const config: Config = {
         "safecrib-white": "#FFFFFF",
       },
       fontFamily: {
-        display: ["var(--font-display)", "serif"],
-        sans: ["var(--font-sans)", "sans-serif"],
+        display: ["var(--font-manrope)", "Manrope", "Arial", "sans-serif"],
+        sans: ["var(--font-dm-sans)", "DM Sans", "Arial", "sans-serif"],
       },
       maxWidth: {
         content: "72rem",

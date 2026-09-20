@@ -1,23 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { DM_Sans, Manrope } from "next/font/google";
 import { InitialPageLoader } from "@/components/loading/InitialPageLoader";
 import { NetworkMonitor } from "@/components/network/NetworkMonitor";
 import { PWAProvider } from "@/components/pwa/PWAProvider";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import "./globals.css";
 
-const display = Fraunces({
+const manrope = Manrope({
   subsets: ["latin"],
-  weight: ["400", "500"],
-  style: ["normal", "italic"],
-  variable: "--font-display",
+  weight: ["500", "600", "700", "800"],
+  variable: "--font-manrope",
   display: "swap",
 });
 
-const sans = Inter({
+const dmSans = DM_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-sans",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-dm-sans",
   display: "swap",
 });
 
@@ -41,8 +40,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable}`}>
-      <body className="bg-safecrib-white font-sans text-safecrib-black antialiased">
+    <html lang="en" className={`${manrope.variable} ${dmSans.variable}`}>
+      <body className={`${dmSans.className} bg-safecrib-white font-sans text-safecrib-black antialiased`}>
         <PWAProvider>
           <InitialPageLoader />
           <NetworkMonitor />

@@ -104,9 +104,7 @@ export function NetworkMonitor() {
           <Button type="button" variant="primary" onClick={() => void retryConnection()} disabled={isChecking}>
             {isChecking ? "Checking connection…" : "Try again"}
           </Button>
-          <Button type="button" variant="secondary" onClick={openNetworkSettings}>
-            Open network settings
-          </Button>
+         
         </div>
 
         {settingsMessage && <p className="mt-4 text-xs leading-relaxed text-black/50">{settingsMessage}</p>}

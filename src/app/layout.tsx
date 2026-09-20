@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import { InitialPageLoader } from "@/components/loading/InitialPageLoader";
+import { NetworkMonitor } from "@/components/network/NetworkMonitor";
 import { PWAProvider } from "@/components/pwa/PWAProvider";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import "./globals.css";
@@ -44,6 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-safecrib-white font-sans text-safecrib-black antialiased">
         <PWAProvider>
           <InitialPageLoader />
+          <NetworkMonitor />
           {children}
           <InstallPrompt />
         </PWAProvider>

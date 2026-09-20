@@ -18,7 +18,7 @@ export default function Home() {
           </h1>
 
           <p className="mt-6 max-w-md text-base leading-relaxed text-black/60">
-            Something better for finding a place to live is being built..SafeCrib is creating a
+            Something better for finding a place to live is being built.SafeCrib is creating a
             more trusted way for students to discover verified accommodation.
           </p>
 

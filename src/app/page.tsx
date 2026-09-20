@@ -1,4 +1,5 @@
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
+import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
 import { NotificationForm } from "@/components/notifications/NotificationForm";
 import { InstallButton } from "@/components/pwa/InstallButton";
 
@@ -27,6 +28,9 @@ export default function Home() {
           </div>
         </div>
 
+        <div className="flex w-full justify-center lg:w-[48%] lg:justify-end" aria-label="Verified student accommodation illustration">
+          <VerifiedHomeIllustration />
+        </div>
       </div>
 
       <footer className="text-xs text-black/30">SafeCrib</footer>

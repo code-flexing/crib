@@ -1,5 +1,4 @@
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
-import { SafeCribLoader } from "@/components/loading/SafeCribLoader";
 import { NotificationForm } from "@/components/notifications/NotificationForm";
 import { InstallButton } from "@/components/pwa/InstallButton";
 
@@ -28,9 +27,6 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="flex justify-center lg:justify-end" aria-hidden="true">
-          <SafeCribLoader size="lg" label="SafeCrib" />
-        </div>
       </div>
 
       <footer className="text-xs text-black/30">SafeCrib</footer>

@@ -16,7 +16,7 @@ type SafeCribLogoProps = {
  * controls layout (sizing, optional home link, loading priority).
  */
 export function SafeCribLogo({
-  height = 32,
+  height = 42,
   href = "/",
   className,
   priority = true,

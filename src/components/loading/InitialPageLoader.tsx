@@ -7,7 +7,7 @@ export function InitialPageLoader() {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setVisible(false), 900);
+    const timer = window.setTimeout(() => setVisible(false), 3000);
 
     return () => window.clearTimeout(timer);
   }, []);

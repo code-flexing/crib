@@ -47,105 +47,20 @@ body {
 /* ---------------------------------------------------------------------- */
 
 .safecrib-loader {
-  color: var(--safecrib-green);
-  overflow: visible;
+  display: block;
+  object-fit: contain;
+  animation: safecrib-logo-pulse 1.5s ease-in-out infinite;
 }
 
-.safecrib-loader__line {
-  /* Path length of the two diagonals (M8 34 L24 10 / M24 10 L40 34) is
-     sqrt(16² + 24²) ≈ 28.84; 29 keeps the draw-in reaching exactly 0 instead
-     of finishing early against an oversized dasharray. */
-  stroke-dasharray: 29;
-  stroke-dashoffset: 29;
-  animation: safecrib-draw-diagonal 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-}
-
-.safecrib-loader__line--left {
-  animation-delay: 0s;
-}
-
-.safecrib-loader__line--right {
-  animation-delay: 0.35s;
-}
-
-.safecrib-loader__line--base {
-  /* M8 34 L40 34 is exactly 32 units long — its own dasharray, so it needs
-     its own keyframes rather than reusing the diagonals' 29-unit values
-     (which left a sliver of this line visible even at "hidden"). */
-  stroke-dasharray: 32;
-  stroke-dashoffset: 32;
-  animation: safecrib-draw-base 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-  animation-delay: 0.7s;
-}
-
-.safecrib-loader__node {
-  opacity: 0;
-  transform-origin: center;
-  transform-box: fill-box;
-  animation: safecrib-settle 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-}
-
-.safecrib-loader__node--apex {
-  animation-delay: 0.25s;
-}
-
-.safecrib-loader__node--left {
-  animation-delay: 0.95s;
-}
-
-.safecrib-loader__node--right {
-  animation-delay: 1.05s;
-}
-
-@keyframes safecrib-draw-diagonal {
-  0% {
-    stroke-dashoffset: 29;
-    opacity: 0.35;
-  }
-  30%,
-  75% {
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
-  92%,
-  100% {
-    stroke-dashoffset: 29;
-    opacity: 0.35;
-  }
-}
-
-@keyframes safecrib-draw-base {
-  0% {
-    stroke-dashoffset: 32;
-    opacity: 0.35;
-  }
-  30%,
-  75% {
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
-  92%,
-  100% {
-    stroke-dashoffset: 32;
-    opacity: 0.35;
-  }
-}
-
-@keyframes safecrib-settle {
+@keyframes safecrib-logo-pulse {
   0%,
-  10% {
-    opacity: 0;
-    transform: scale(0.4);
+  100% {
+    opacity: 0.55;
+    transform: scale(0.92);
   }
-  25%,
-  80% {
+  50% {
     opacity: 1;
     transform: scale(1);
-  }
-  92%,
-  100% {
-    opacity: 0;
-    transform: scale(0.4);
   }
 }
 
@@ -162,10 +77,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .safecrib-loader__line,
-  .safecrib-loader__node {
+  .safecrib-loader {
     animation: none;
-    stroke-dashoffset: 0;
     opacity: 1;
     transform: scale(1);
   }

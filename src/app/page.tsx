@@ -22,7 +22,7 @@ const verificationFlow = [
   "Approved",
   "Authenticated students discover it",
 ];
- 
+
 const studentSteps = [
   { title: "Create an account", text: "Join with a simple student profile and basic verification." },
   { title: "Explore verified homes", text: "Browse accommodation with clear evidence and trust context." },
@@ -135,16 +135,12 @@ function RouteLink({
 }
 
 export default function Home() {
-  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(true);
   const accountHref = isAuthenticated ? "/dashboard" : "/signup";
   const accountCta = isAuthenticated ? "Go to dashboard" : "Get Started";
 
   useEffect(() => {
-    router.replace("/login");
-    setIsRedirecting(false);
     setIsAuthenticated(Boolean(window.localStorage.getItem("safecrib_access_token")));
 
     const elements = document.querySelectorAll("[data-reveal]");
@@ -169,10 +165,6 @@ export default function Home() {
   }, []);
 
   const handleNavigate = () => setMenuOpen(false);
-
-  if (isRedirecting) {
-    return null;
-  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-content flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { PWAInstallContext, type PWAInstallAvailability, type PWAInstallContextValue } from "@/hooks/usePWAInstall";
 import {
   detectPlatform,
@@ -15,11 +16,19 @@ import {
 } from "@/lib/pwa";
 
 export function PWAProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isPromptOpen, setIsPromptOpen] = useState(false);
   const [platform, setPlatform] = useState<PWAPlatform>("unknown");
   const [engine, setEngine] = useState<PWABrowserEngine>("unknown");
+
+  useEffect(() => {
+    if (isRunningStandalone() && pathname !== "/login") {
+      router.replace("/login");
+    }
+  }, [pathname, router]);
 
   useEffect(() => {
     registerServiceWorker();

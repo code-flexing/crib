@@ -168,7 +168,7 @@ export default function Home() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-content flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">
-      <header className="sticky top-0 z-40 border-b border-black/10 bg-safecrib-white/90 backdrop-blur-md supports-[backdrop-filter]:bg-safecrib-white/85">
+      <header className="sticky top-0 z-40 border-b border-black/10 bg-safecrib-white">
         <div className="mx-auto flex max-w-content items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-6 lg:px-8">
           <SafeCribLogo height={20} />
 

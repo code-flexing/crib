@@ -7,7 +7,7 @@ import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
 import { Button } from "@/components/ui/Button";
 
-const API_URL = "https://pible.onrender.com/api/v1/auth/login";
+const API_URL = "/api/auth/login";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());

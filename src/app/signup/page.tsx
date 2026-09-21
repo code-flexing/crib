@@ -6,7 +6,7 @@ import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
 import { Button } from "@/components/ui/Button";
 
-const API_URL = "https://pible.onrender.com/api/v1/auth/register";
+const API_URL = "/api/auth/register";
 
 type FormState = {
   email: string;

@@ -22,7 +22,7 @@ const verificationFlow = [
   "Approved",
   "Authenticated students discover it",
 ];
-
+ 
 const studentSteps = [
   { title: "Create an account", text: "Join with a simple student profile and basic verification." },
   { title: "Explore verified homes", text: "Browse accommodation with clear evidence and trust context." },

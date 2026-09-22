@@ -1,5 +1,4 @@
 {
-  "/api/backend/[...path]/route": "app/api/backend/[...path]/route.js",
   "/manifest.webmanifest/route": "app/manifest.webmanifest/route.js",
   "/profile/complete/page": "app/profile/complete/page.js",
   "/page": "app/page.js",

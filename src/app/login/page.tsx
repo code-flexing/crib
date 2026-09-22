@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
 import { Button } from "@/components/ui/Button";
@@ -20,6 +20,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("reason") === "session-expired") {
+      setError("Your session expired. Please log in again.");
+    }
+  }, []);
 
   const goNext = () => {
     setError("");
@@ -79,20 +85,20 @@ export default function LoginPage() {
         return;
       }
 
-      if (
-        typeof result !== "object" ||
-        result === null ||
-        !("accessToken" in result) ||
-        !("refreshToken" in result) ||
-        typeof result.accessToken !== "string" ||
-        typeof result.refreshToken !== "string"
-      ) {
+      const accessToken = typeof result === "object" && result !== null && "accessToken" in result && typeof result.accessToken === "string"
+        ? result.accessToken
+        : typeof result === "object" && result !== null && "access_token" in result && typeof result.access_token === "string" ? result.access_token : null;
+      const refreshToken = typeof result === "object" && result !== null && "refreshToken" in result && typeof result.refreshToken === "string"
+        ? result.refreshToken
+        : typeof result === "object" && result !== null && "refresh_token" in result && typeof result.refresh_token === "string" ? result.refresh_token : null;
+
+      if (!accessToken || !refreshToken) {
         setError("Login succeeded, but the server returned an invalid token response.");
         return;
       }
 
-      localStorage.setItem("safecrib_access_token", result.accessToken);
-      localStorage.setItem("safecrib_refresh_token", result.refreshToken);
+      localStorage.setItem("safecrib_access_token", accessToken);
+      localStorage.setItem("safecrib_refresh_token", refreshToken);
       router.push("/dashboard");
     } catch {
       setError("Network error. Please try again.");

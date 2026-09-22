@@ -1,7 +1,8 @@
 {
-  "/manifest.webmanifest/route": "app/manifest.webmanifest/route.js",
   "/api/backend/[...path]/route": "app/api/backend/[...path]/route.js",
+  "/manifest.webmanifest/route": "app/manifest.webmanifest/route.js",
   "/profile/complete/page": "app/profile/complete/page.js",
   "/page": "app/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/dashboard/page": "app/dashboard/page.js",
+  "/login/page": "app/login/page.js"
 }

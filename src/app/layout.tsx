@@ -4,7 +4,7 @@ import { NetworkMonitor } from "@/components/network/NetworkMonitor";
 import { PWAProvider } from "@/components/pwa/PWAProvider";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import "./globals.css";
-
+import { Analytics } from "@vercel/analytics/next"
 const manrope = Manrope({
   subsets: ["latin"],
   weight: ["500", "600", "700", "800"],
@@ -42,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${manrope.variable} ${dmSans.variable}`}>
       <body className={`${dmSans.className} bg-safecrib-white font-sans text-safecrib-black antialiased`}>
         <PWAProvider>
+          <Analytics />
           <NetworkMonitor />
           {children}
           <InstallPrompt />

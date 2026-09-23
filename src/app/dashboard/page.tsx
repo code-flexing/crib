@@ -7,10 +7,11 @@ import { useEffect, useState } from "react";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { RestrictedActionModal } from "@/components/dashboard/RestrictedActionModal";
 import { Button } from "@/components/ui/Button";
-import { apiFetch, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, type AccountStatus, type PageStatus } from "@/lib/api";
+import { apiFetch, displayName, getCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, resolveMediaUrl, type AccountStatus, type PageStatus } from "@/lib/api";
 
 type Listing = { id: string; title?: string; description?: string; price?: number; address?: string; campus?: string; photos?: string[]; images?: string[] };
-type Profile = { displayName?: string; email?: string; role?: string; studentProfileStatus?: unknown };
+type Profile = { displayName?: unknown; email?: string; role?: string; profilePicture?: string; studentProfileStatus?: unknown };
+type StudentProfile = { profilePicture?: string } | null;
 type ProviderPage = { id?: string; status?: string; rejectionReason?: string; reason?: string } | null;
 
 function accountMessage(status: AccountStatus, action: string) {
@@ -26,7 +27,9 @@ export default function DashboardPage() {
   const [pageStatus, setPageStatus] = useState<PageStatus>("none");
   const [listings, setListings] = useState<Listing[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [openSupportCount, setOpenSupportCount] = useState(0);
 
   useEffect(() => {
     if (!localStorage.getItem("safecrib_access_token")) {
@@ -35,13 +38,16 @@ export default function DashboardPage() {
     }
 
     void Promise.all([
-      apiFetch<Profile>("/api/v1/users/me"),
+      getCurrentUser<Profile>(),
+      apiFetch<StudentProfile>("/api/v1/student-profiles/me").catch(() => null),
       apiFetch<unknown>("/api/v1/student-profiles/status").catch(() => null),
       apiFetch<ProviderPage>("/api/v1/provider-pages/me").catch(() => null),
-      apiFetch<Listing[]>("/api/v1/listings"),
+      apiFetch<Listing[]>("/api/v1/listings").catch(() => []),
       apiFetch<Listing[]>("/api/v1/listings/bookmarks").catch(() => []),
-    ]).then(([user, studentStatus, providerPage, homes, bookmarks]) => {
+      apiFetch<unknown>("/api/v1/support/conversations").catch(() => []),
+    ]).then(async ([user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations]) => {
       setProfile(user);
+      setProfileImage(await resolveMediaUrl(user.profilePicture ?? studentProfile?.profilePicture));
       const profileStatus = typeof user.studentProfileStatus === "object" && user.studentProfileStatus !== null && "status" in user.studentProfileStatus
         ? user.studentProfileStatus.status
         : studentStatus && typeof studentStatus === "object" && "status" in studentStatus ? studentStatus.status : studentStatus;
@@ -49,6 +55,8 @@ export default function DashboardPage() {
       setPageStatus(normalizePageStatus(providerPage?.status));
       setListings(Array.isArray(homes) ? homes : []);
       setBookmarkedIds(Array.isArray(bookmarks) ? bookmarks.map((listing) => listing.id) : []);
+      const conversationList = Array.isArray(conversations) ? conversations : [];
+      setOpenSupportCount(conversationList.filter((conversation) => typeof conversation === "object" && conversation !== null && "status" in conversation && String(conversation.status).toUpperCase() === "OPEN").length);
     }).catch((loadError: unknown) => {
       if (isUnauthorizedError(loadError)) {
         localStorage.removeItem("safecrib_access_token");
@@ -88,15 +96,16 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
-      <DashboardNav onCreatePage={openPage} onSignOut={signOut} pageStatus={pageStatus} canManagePage={profile?.role === "AGENT" || profile?.role === "LANDLORD"} />
+      <DashboardNav onCreatePage={openPage} onSignOut={signOut} pageStatus={pageStatus} canManagePage={profile?.role === "AGENT" || profile?.role === "LANDLORD"} displayName={displayName(profile?.displayName)} profileImage={profileImage} />
       <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-safecrib-green">Home</p>
-            <h1 className="mt-2 text-3xl font-medium text-safecrib-black sm:text-4xl">Find a verified home{profile?.displayName ? `, ${profile.displayName}` : ""}.</h1>
+            <h1 className="mt-2 font-display text-3xl italic text-safecrib-black sm:text-4xl">{displayName(profile?.displayName) || "Welcome"}</h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-black/60">Browse available accommodation and inspect the details before you decide what to do next.</p>
           </div>
           <div className="flex flex-wrap gap-4 text-sm font-medium">
+            <Link href="/support" aria-label={`Open support${openSupportCount ? `, ${openSupportCount} open` : ""}`} className="inline-flex items-center gap-2 text-safecrib-green hover:underline"><span aria-hidden="true">?</span><span>Support</span>{openSupportCount > 0 && <span className="rounded-full bg-safecrib-green px-2 py-0.5 text-xs text-white">{openSupportCount}</span>}</Link>
             {accountStatus === "not_submitted" && <Link href="/profile/complete" className="text-safecrib-green hover:underline">Complete student profile</Link>}
             {accountStatus === "rejected" && <Link href="/profile/complete" className="text-safecrib-green hover:underline">Update rejected profile</Link>}
             {pageStatus !== "none" && <Link href="/page" className="text-safecrib-green hover:underline">View my Page</Link>}

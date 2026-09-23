@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
 import { Button } from "@/components/ui/Button";
+import { ApiError, getCurrentUser } from "@/lib/api";
 
 const API_URL = "/api/auth/login";
 
@@ -85,12 +86,15 @@ export default function LoginPage() {
         return;
       }
 
-      const accessToken = typeof result === "object" && result !== null && "accessToken" in result && typeof result.accessToken === "string"
-        ? result.accessToken
-        : typeof result === "object" && result !== null && "access_token" in result && typeof result.access_token === "string" ? result.access_token : null;
-      const refreshToken = typeof result === "object" && result !== null && "refreshToken" in result && typeof result.refreshToken === "string"
-        ? result.refreshToken
-        : typeof result === "object" && result !== null && "refresh_token" in result && typeof result.refresh_token === "string" ? result.refresh_token : null;
+      const tokenValue = (key: string) => {
+        if (typeof result !== "object" || result === null) return null;
+        const response = result as Record<string, unknown>;
+        const nested = typeof response.data === "object" && response.data !== null ? response.data as Record<string, unknown> : null;
+        const value = response[key] ?? nested?.[key];
+        return typeof value === "string" && value.trim() ? value.trim().replace(/^Bearer\s+/i, "") : null;
+      };
+      const accessToken = tokenValue("accessToken") ?? tokenValue("access_token");
+      const refreshToken = tokenValue("refreshToken") ?? tokenValue("refresh_token");
 
       if (!accessToken || !refreshToken) {
         setError("Login succeeded, but the server returned an invalid token response.");
@@ -99,6 +103,20 @@ export default function LoginPage() {
 
       localStorage.setItem("safecrib_access_token", accessToken);
       localStorage.setItem("safecrib_refresh_token", refreshToken);
+
+      try {
+        await getCurrentUser<unknown>();
+      } catch (profileError) {
+        if (profileError instanceof ApiError && profileError.status === 401) {
+          localStorage.removeItem("safecrib_access_token");
+          localStorage.removeItem("safecrib_refresh_token");
+          setError("Your login session was not accepted. Please try again.");
+          return;
+        }
+
+        // Profile approval gates actions, not authentication or dashboard access.
+      }
+
       router.push("/dashboard");
     } catch {
       setError("Network error. Please try again.");

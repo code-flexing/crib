@@ -15,6 +15,121 @@ export function isUnauthorizedError(error: unknown): error is ApiError {
   return error instanceof ApiError && error.status === 401;
 }
 
+export type AuthUser = { email?: string; role?: string; displayName?: unknown };
+
+export function clearSession() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("safecrib_access_token");
+  localStorage.removeItem("safecrib_refresh_token");
+}
+
+export async function refreshSession() {
+  const refreshToken = typeof window === "undefined" ? null : localStorage.getItem("safecrib_refresh_token");
+  if (!refreshToken) throw new ApiError(401, "Session expired.");
+  const response = await apiFetch<unknown>("/api/v1/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
+  });
+  const tokens = extractTokens(response);
+  if (!tokens) throw new ApiError(401, "Session refresh failed.");
+  localStorage.setItem("safecrib_access_token", tokens.accessToken);
+  localStorage.setItem("safecrib_refresh_token", tokens.refreshToken);
+}
+
+export async function authenticatedFetch<T>(path: string, init: RequestInit = {}) {
+  try {
+    return await apiFetch<T>(path, init);
+  } catch (error) {
+    if (!isUnauthorizedError(error)) throw error;
+    try {
+      await refreshSession();
+      return await apiFetch<T>(path, init);
+    } catch (refreshError) {
+      clearSession();
+      throw refreshError;
+    }
+  }
+}
+
+export async function adminFetch<T>(path: string, init: RequestInit = {}) {
+  return authenticatedFetch<T>(path, init);
+}
+
+export async function verifyAdminSession() {
+  const user = unwrapData<AuthUser>(await adminFetch<unknown>("/api/v1/auth/me", { method: "POST" }));
+  if (String(user.role ?? "").toUpperCase() !== "ADMIN") throw new ApiError(403, "Administrator access required.");
+  return user;
+}
+
+export async function logoutSession() {
+  const refreshToken = typeof window === "undefined" ? null : localStorage.getItem("safecrib_refresh_token");
+  try {
+    if (refreshToken) await apiFetch("/api/v1/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken }) });
+  } finally {
+    clearSession();
+  }
+}
+
+export async function getCurrentUser<T>() {
+  try {
+    return unwrapData<T>(await apiFetch<unknown>("/api/v1/users/me"));
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 401 || error.status === 404 || error.status === 405)) {
+      try {
+        return await apiFetch<T>("/api/v1/auth/me", { method: "POST" });
+      } catch (fallbackError) {
+        if (!(fallbackError instanceof ApiError) || fallbackError.status !== 401) throw fallbackError;
+        const refreshToken = typeof window === "undefined" ? null : localStorage.getItem("safecrib_refresh_token");
+        if (!refreshToken) throw fallbackError;
+
+        const refreshed = await apiFetch<unknown>("/api/v1/auth/refresh", {
+          method: "POST",
+          body: JSON.stringify({ refreshToken }),
+        });
+        const tokens = extractTokens(refreshed);
+        if (!tokens) throw fallbackError;
+        localStorage.setItem("safecrib_access_token", tokens.accessToken);
+        localStorage.setItem("safecrib_refresh_token", tokens.refreshToken);
+        return unwrapData<T>(await apiFetch<unknown>("/api/v1/users/me"));
+      }
+    }
+    throw error;
+  }
+}
+
+function extractTokens(value: unknown): { accessToken: string; refreshToken: string } | null {
+  if (typeof value !== "object" || value === null) return null;
+  const response = value as Record<string, unknown>;
+  const nested = typeof response.data === "object" && response.data !== null ? response.data as Record<string, unknown> : null;
+  const accessToken = response.accessToken ?? response.access_token ?? nested?.accessToken ?? nested?.access_token;
+  const refreshToken = response.refreshToken ?? response.refresh_token ?? nested?.refreshToken ?? nested?.refresh_token;
+  if (typeof accessToken !== "string" || typeof refreshToken !== "string") return null;
+  return {
+    accessToken: accessToken.replace(/^Bearer\s+/i, "").trim(),
+    refreshToken: refreshToken.replace(/^Bearer\s+/i, "").trim(),
+  };
+}
+
+export function displayName(value: unknown): string {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>;
+    if (typeof record.displayName === "string" && record.displayName.trim()) return record.displayName.trim();
+    const firstName = typeof record.firstName === "string" ? record.firstName.trim() : "";
+    const lastName = typeof record.lastName === "string" ? record.lastName.trim() : "";
+    if (firstName || lastName) return `${firstName} ${lastName}`.trim();
+    if (typeof record.name === "string" && record.name.trim()) return record.name.trim();
+  }
+  return "";
+}
+
+export function unwrapData<T>(value: unknown): T {
+  if (typeof value === "object" && value !== null && "data" in value) {
+    return (value as { data: T }).data;
+  }
+  return value as T;
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = typeof window === "undefined" ? null : localStorage.getItem("safecrib_access_token");
   const headers = new Headers(init.headers);
@@ -41,28 +156,92 @@ type UploadSignature = {
   uploadUrl?: string;
   signedUploadUrl?: string;
   url?: string;
+  uploadPayload?: {
+    uploadUrl?: string;
+    signedUploadUrl?: string;
+    url?: string;
+    fields?: Record<string, string>;
+    uploadFields?: Record<string, string>;
+    api_key?: string;
+    timestamp?: string | number;
+    signature?: string;
+    public_id?: string;
+    folder?: string;
+    upload_preset?: string;
+  };
   fields?: Record<string, string>;
   uploadFields?: Record<string, string>;
+  api_key?: string;
+  timestamp?: string | number;
+  signature?: string;
+  public_id?: string;
+  folder?: string;
+  upload_preset?: string;
   id?: string;
   mediaId?: string;
 };
 
-export async function uploadDocument(file: File, purpose: "PROOF_OF_LICENSE" | "PROOF_OF_STUDENTSHIP") {
-  const signature = await apiFetch<UploadSignature>("/api/v1/media/upload-signature", {
+type UploadPurpose = "AVATAR" | "COVER_PHOTO" | "PROOF_OF_LICENSE" | "PROOF_OF_STUDENTSHIP";
+
+export async function uploadDocument(file: File, purpose: UploadPurpose) {
+  const signaturePath = purpose === "AVATAR"
+    ? "/api/v1/media/profile-picture/upload-signature"
+    : purpose === "COVER_PHOTO"
+      ? "/api/v1/media/cover-photo/upload-signature"
+      : "/api/v1/media/upload-signature";
+  const signature = unwrapData<UploadSignature>(await apiFetch<unknown>(signaturePath, {
     method: "POST",
-    body: JSON.stringify({ purpose, contentType: file.type, sizeBytes: file.size }),
-  });
-  const uploadUrl = signature.uploadUrl ?? signature.signedUploadUrl ?? signature.url;
+    body: JSON.stringify({ ...(signaturePath === "/api/v1/media/upload-signature" ? { purpose } : {}), contentType: file.type, sizeBytes: file.size }),
+  }));
+  const payload = signature.uploadPayload ?? signature;
+  const uploadUrl = payload.uploadUrl ?? payload.signedUploadUrl ?? payload.url;
   const mediaId = signature.mediaId ?? signature.id;
   if (!uploadUrl || !mediaId) throw new Error("The upload service returned an incomplete upload payload.");
 
   const body = new FormData();
-  Object.entries(signature.fields ?? signature.uploadFields ?? {}).forEach(([key, value]) => body.append(key, value));
+  Object.entries(payload.fields ?? payload.uploadFields ?? {}).forEach(([key, value]) => body.append(key, value));
+  for (const key of ["api_key", "timestamp", "signature", "public_id", "folder", "upload_preset"] as const) {
+    const value = payload[key];
+    if (value !== undefined && !body.has(key)) body.append(key, String(value));
+  }
   body.append("file", file);
   const uploadResponse = await fetch(uploadUrl, { method: "POST", body });
   if (!uploadResponse.ok) throw new Error("The document upload failed.");
   await apiFetch(`/api/v1/media/${mediaId}/confirm`, { method: "POST", body: JSON.stringify({ bytes: file.size, format: file.name.split(".").pop() ?? "" }) });
   return mediaId;
+}
+
+export async function resolveMediaUrl(reference: unknown): Promise<string | null> {
+  if (typeof reference !== "string" || !reference) return null;
+  if (/^(https?:|data:|blob:)/.test(reference)) return reference;
+
+  try {
+    const response = await apiFetch<unknown>(`/api/v1/media/${encodeURIComponent(reference)}/access`);
+    if (typeof response === "string") return response;
+    if (typeof response === "object" && response !== null) {
+      const mediaResponse = response as Record<string, unknown>;
+      for (const key of ["url", "accessUrl", "deliveryUrl"]) {
+        if (typeof mediaResponse[key] === "string") return mediaResponse[key];
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export async function resolveAdminMediaUrl(reference: unknown): Promise<string | null> {
+  if (typeof reference !== "string" || !reference) return null;
+  if (/^(https?:|data:|blob:)/.test(reference)) return reference;
+  try {
+    const response = unwrapData<unknown>(await adminFetch<unknown>(`/api/v1/media/${encodeURIComponent(reference)}/access`));
+    if (typeof response === "string") return response;
+    if (typeof response === "object" && response !== null) {
+      const mediaResponse = response as Record<string, unknown>;
+      for (const key of ["url", "accessUrl", "deliveryUrl"]) if (typeof mediaResponse[key] === "string") return mediaResponse[key];
+    }
+  } catch { return null; }
+  return null;
 }
 
 export function normalizeAccountStatus(value: unknown): AccountStatus {

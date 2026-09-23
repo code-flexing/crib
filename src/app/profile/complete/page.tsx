@@ -13,18 +13,20 @@ type StudentProfile = {
   courseOfStudy?: string;
   level?: string;
   profilePicture?: string;
+  coverPhoto?: string;
   proofOfStudentship?: string;
   dateOfBirth?: string;
   gender?: string;
   phoneNumber?: string;
   emergencyContact?: string;
+  socialLinks?: Record<string, string>;
   status?: string;
   rejectionReason?: string;
   reason?: string;
 };
 
 type User = { displayName?: string; studentProfileStatus?: unknown; role?: string };
-type FormState = Omit<StudentProfile, "status" | "rejectionReason" | "reason">;
+type FormState = Omit<StudentProfile, "status" | "rejectionReason" | "reason" | "socialLinks"> & { linkedin: string; website: string };
 
 const emptyForm: FormState = {
   displayName: "",
@@ -32,11 +34,14 @@ const emptyForm: FormState = {
   courseOfStudy: "",
   level: "",
   profilePicture: "",
+  coverPhoto: "",
   proofOfStudentship: "",
   dateOfBirth: "",
   gender: "",
   phoneNumber: "",
   emergencyContact: "",
+  linkedin: "",
+  website: "",
 };
 
 export default function CompleteStudentProfilePage() {
@@ -48,6 +53,8 @@ export default function CompleteStudentProfilePage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingStudentship, setUploadingStudentship] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem("safecrib_access_token")) {
@@ -67,7 +74,7 @@ export default function CompleteStudentProfilePage() {
       setStatus(normalizeAccountStatus(rawStatus));
       setPageStatus(normalizePageStatus(page?.status));
       if (studentProfile) {
-        setForm((current) => ({ ...current, ...studentProfile }));
+        setForm((current) => ({ ...current, ...studentProfile, linkedin: studentProfile.socialLinks?.linkedin ?? "", website: studentProfile.socialLinks?.website ?? "" }));
         setRejectionReason(studentProfile.rejectionReason ?? studentProfile.reason ?? "");
       }
     }).catch((loadError: unknown) => {
@@ -89,6 +96,18 @@ export default function CompleteStudentProfilePage() {
     catch (uploadError) { setError(uploadError instanceof Error ? uploadError.message : "We could not upload the studentship document."); }
     finally { setUploadingStudentship(false); }
   };
+  const uploadAvatar = async (file: File) => {
+    setUploadingAvatar(true); setError("");
+    try { update("profilePicture", await uploadDocument(file, "AVATAR")); }
+    catch (uploadError) { setError(uploadError instanceof Error ? uploadError.message : "We could not upload the profile image."); }
+    finally { setUploadingAvatar(false); }
+  };
+  const uploadCover = async (file: File) => {
+    setUploadingCover(true); setError("");
+    try { update("coverPhoto", await uploadDocument(file, "COVER_PHOTO")); }
+    catch (uploadError) { setError(uploadError instanceof Error ? uploadError.message : "We could not upload the cover photo."); }
+    finally { setUploadingCover(false); }
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -97,7 +116,7 @@ export default function CompleteStudentProfilePage() {
     try {
       await apiFetch("/api/v1/student-profiles/complete", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, socialLinks: { linkedin: form.linkedin, website: form.website } }),
       });
       router.replace("/dashboard");
     } catch {
@@ -120,6 +139,7 @@ export default function CompleteStudentProfilePage() {
     </label>
   );
   const studentshipDocument = <label className="block text-sm font-medium text-safecrib-black"><span>Proof of studentship document *</span><input required={!form.proofOfStudentship} type="file" accept="application/pdf,image/*" disabled={uploadingStudentship} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadStudentship(file); }} className="mt-2 block w-full text-sm font-normal text-black/65" />{form.proofOfStudentship && <span className="mt-2 block text-xs font-normal text-safecrib-green">Document uploaded.</span>}</label>;
+  const avatarInput = <label className="block text-sm font-medium text-safecrib-black"><span>Profile image *</span><input required={!form.profilePicture} type="file" accept="image/*" disabled={uploadingAvatar} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAvatar(file); }} className="mt-2 block w-full text-sm font-normal text-black/65" />{form.profilePicture && <span className="mt-2 block text-xs font-normal text-safecrib-green">Profile image uploaded.</span>}</label>;
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
@@ -136,13 +156,16 @@ export default function CompleteStudentProfilePage() {
           {input("courseOfStudy", "Course of study", true)}
           {input("level", "Level", true)}
           {studentshipDocument}
-          {input("profilePicture", "Profile picture reference", true)}
+          {avatarInput}
+          <label className="block text-sm font-medium text-safecrib-black"><span>Cover photo</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingCover} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCover(file); }} className="mt-2 block w-full text-sm font-normal text-black/65" />{form.coverPhoto && <span className="mt-2 block text-xs font-normal text-safecrib-green">Cover photo uploaded.</span>}</label>
           {input("dateOfBirth", "Date of birth")}
           {input("gender", "Gender")}
           {input("phoneNumber", "Phone number")}
           {input("emergencyContact", "Emergency contact")}
+          {input("linkedin", "LinkedIn link")}
+          {input("website", "Website link")}
           {error && <p className="sm:col-span-2 text-sm text-red-600" role="alert">{error}</p>}
-          <div className="sm:col-span-2"><Button type="submit" loading={saving || uploadingStudentship} disabled={status === "pending"}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button></div>
+          <div className="sm:col-span-2"><Button type="submit" loading={saving || uploadingStudentship || uploadingAvatar || uploadingCover} disabled={status === "pending"}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button></div>
         </form>
       </section>
     </main>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 
@@ -9,6 +10,8 @@ type DashboardNavProps = {
   onSignOut: () => void;
   pageStatus: "none" | "pending" | "approved" | "rejected";
   canManagePage?: boolean;
+  displayName?: string;
+  profileImage?: string | null;
 };
 
 const items = [
@@ -16,9 +19,12 @@ const items = [
   { href: "/profile", label: "Profile", icon: "◎" },
 ];
 
-export function DashboardNav({ onCreatePage, onSignOut, pageStatus, canManagePage = true }: DashboardNavProps) {
+export function DashboardNav({ onCreatePage, onSignOut, pageStatus, canManagePage = true, displayName, profileImage }: DashboardNavProps) {
   const pathname = usePathname();
   const pageLabel = pageStatus === "none" ? "Page" : "My Page";
+  const initials = (displayName ?? "P").trim().slice(0, 1).toUpperCase();
+
+  const avatar = (size: string, pixels: number) => profileImage ? <Image src={profileImage} alt="" width={pixels} height={pixels} unoptimized className={`${size} rounded-full object-cover`} /> : <span className={`${size} flex items-center justify-center rounded-full bg-safecrib-green text-xs font-semibold text-safecrib-white`}>{initials}</span>;
 
   return (
     <header className="border-b border-black/10 bg-safecrib-white md:sticky md:top-0 md:z-40">
@@ -36,6 +42,7 @@ export function DashboardNav({ onCreatePage, onSignOut, pageStatus, canManagePag
           <button type="button" onClick={onSignOut} className="ml-2 rounded-[4px] border border-black/15 px-4 py-2 text-sm font-medium text-safecrib-black hover:bg-black/[0.03]">
             Sign out
           </button>
+          <Link href="/profile" aria-label="Open profile" className="ml-1 rounded-full">{avatar("h-9 w-9", 36)}</Link>
         </nav>
       </div>
       <nav aria-label="Mobile dashboard navigation" className="fixed inset-x-0 bottom-0 z-50 flex border-t border-black/10 bg-safecrib-white pb-[var(--safe-area-bottom)] md:hidden">
@@ -44,7 +51,7 @@ export function DashboardNav({ onCreatePage, onSignOut, pageStatus, canManagePag
         </Link>
         {canManagePage && <button type="button" onClick={onCreatePage} className="flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium text-black/60"><span aria-hidden="true" className="text-2xl leading-none">+</span><span>{pageLabel}</span></button>}
         <Link href="/profile" className={`flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium ${pathname === "/profile" ? "text-safecrib-green" : "text-black/60"}`}>
-          <span aria-hidden="true" className="text-xl leading-none">◎</span><span>Profile</span>
+          {avatar("h-7 w-7", 28)}<span>Profile</span>
         </Link>
       </nav>
     </header>

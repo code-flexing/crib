@@ -360,7 +360,7 @@ export async function uploadDocument(file: File, purpose: UploadPurpose) {
   }
   body.append("file", file);
   try {
-    let uploadResponse = await fetch(uploadUrl, { method: "POST", body });
+    const uploadResponse = await fetch(uploadUrl, { method: "POST", body });
     if (!uploadResponse.ok) {
       const uploadError = await uploadResponse.json().catch(() => null) as { error?: { message?: string }; message?: string } | null;
       const message = uploadError?.error?.message ?? uploadError?.message ?? `Upload rejected (${uploadResponse.status}).`;

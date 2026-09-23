@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 type SafeCribLoaderSize = "sm" | "md" | "lg";
 
 type SafeCribLoaderProps = {
@@ -25,12 +27,13 @@ export function SafeCribLoader({
   const dimension = fullscreen ? DIMENSIONS.lg : DIMENSIONS[size];
 
   const mark = (
-    <img
+    <Image
       className={`safecrib-loader ${className ?? ""}`}
       src="/logo.png"
       width={dimension}
       height={dimension}
       alt={label}
+      priority
     />
   );
 

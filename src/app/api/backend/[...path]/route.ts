@@ -13,7 +13,8 @@ async function forward(request: Request, path: string[]) {
     body: request.method === "GET" ? undefined : await request.text(),
   });
 
-  return new Response(await response.text(), {
+  const responseBody = response.status === 204 ? null : await response.text();
+  return new Response(responseBody, {
     status: response.status,
     headers: { "Content-Type": response.headers.get("content-type") ?? "application/json; charset=utf-8" },
   });

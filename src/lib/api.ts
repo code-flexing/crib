@@ -354,13 +354,27 @@ export async function uploadDocument(file: File, purpose: UploadPurpose) {
   const body = new FormData();
   const fields = recordValue(payload.fields ?? payload.uploadFields ?? payload.formData ?? payload.form_fields);
   const signedKeys = ["api_key", "timestamp", "signature", "public_id", "folder", "upload_preset", "expires_at", "context"] as const;
-  for (const key of signedKeys) {
+  const signedValues = signedKeys.reduce<Record<string, string>>((values, key) => {
     const value = firstValue([payload, fields, ...records], key);
-    if (value !== undefined) body.append(key, cloudinaryFieldValue(value));
-  }
+    if (value !== undefined) values[key] = cloudinaryFieldValue(value);
+    return values;
+  }, {});
+  Object.entries(signedValues).forEach(([key, value]) => body.append(key, value));
   body.append("file", file);
   try {
-    const uploadResponse = await fetch(uploadUrl, { method: "POST", body });
+    let uploadResponse = await fetch(uploadUrl, { method: "POST", body });
+    if (!uploadResponse.ok && signedValues.upload_preset) {
+      const uploadError = await uploadResponse.json().catch(() => null) as { error?: { message?: string }; message?: string } | null;
+      const message = uploadError?.error?.message ?? uploadError?.message ?? "";
+      if (/upload preset not found/i.test(message)) {
+        const retryBody = new FormData();
+        Object.entries(signedValues).forEach(([key, value]) => {
+          if (key !== "upload_preset") retryBody.append(key, value);
+        });
+        retryBody.append("file", file);
+        uploadResponse = await fetch(uploadUrl, { method: "POST", body: retryBody });
+      }
+    }
     if (!uploadResponse.ok) {
       const uploadError = await uploadResponse.json().catch(() => null) as { error?: { message?: string }; message?: string } | null;
       const message = uploadError?.error?.message ?? uploadError?.message ?? `Upload rejected (${uploadResponse.status}).`;

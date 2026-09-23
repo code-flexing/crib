@@ -212,7 +212,7 @@ export default function Home() {
                 >
                   Get Started
                 </RouteLink>
-              </>
+              </>the 
             )}
           </div>
 

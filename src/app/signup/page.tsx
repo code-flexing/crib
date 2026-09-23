@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
 import { Button } from "@/components/ui/Button";
+import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
 
 const API_URL = "/api/auth/register";
 
@@ -19,12 +20,20 @@ type StepErrors = Partial<Record<keyof FormState, string>> & {
   submit?: string;
 };
 
+type SignupDraft = {
+  email: string;
+  displayName: string;
+  step: number;
+};
+
 const emptyForm: FormState = {
   email: "",
   password: "",
   confirmPassword: "",
   displayName: "",
 };
+
+const SIGNUP_DRAFT_KEY = "safecrib:draft:signup:v1";
 
 const stepLabels = [
   "Welcome",
@@ -52,6 +61,28 @@ export default function SignUpPage() {
   const [errors, setErrors] = useState<StepErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  useEffect(() => {
+    const draft = readDraft<SignupDraft>(SIGNUP_DRAFT_KEY);
+    if (draft) {
+      setForm((current) => ({ ...current, email: draft.email, displayName: draft.displayName }));
+      setStep(Math.min(Math.max(draft.step, 0), stepLabels.length - 2));
+      setDraftRestored(true);
+    }
+    setDraftHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftHydrated || isSuccess) return;
+    const timeout = window.setTimeout(() => writeDraft<SignupDraft>(SIGNUP_DRAFT_KEY, {
+      email: form.email,
+      displayName: form.displayName,
+      step,
+    }), 400);
+    return () => window.clearTimeout(timeout);
+  }, [draftHydrated, form.displayName, form.email, isSuccess, step]);
 
   const progress = ((step + 1) / stepLabels.length) * 100;
 
@@ -163,6 +194,14 @@ export default function SignUpPage() {
     setStep((current) => Math.max(current - 1, 0));
   };
 
+  const discardDraft = () => {
+    removeDraft(SIGNUP_DRAFT_KEY);
+    setForm(emptyForm);
+    setStep(0);
+    setErrors({});
+    setDraftRestored(false);
+  };
+
   const handleSubmit = async (event?: FormEvent) => {
     event?.preventDefault();
 
@@ -192,6 +231,7 @@ export default function SignUpPage() {
       }
 
       setIsSuccess(true);
+      removeDraft(SIGNUP_DRAFT_KEY);
       setStep(stepLabels.length - 1);
     } catch {
       setErrors((current) => ({ ...current, submit: "Network error. Please try again." }));
@@ -468,6 +508,7 @@ export default function SignUpPage() {
                     style={{ width: `${progress}%` }}
                   />
                 </div>
+                {draftRestored && <div className="mt-3 flex items-center justify-between gap-3 rounded-[8px] border border-safecrib-green/20 bg-[#EAF7F1] px-3 py-2 text-xs text-safecrib-green"><span>Saved progress restored</span><button type="button" onClick={discardDraft} className="font-medium underline underline-offset-2">Discard</button></div>}
               </div>
 
               <form onSubmit={handleSubmit} className="w-full">

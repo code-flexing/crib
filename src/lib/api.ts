@@ -335,7 +335,7 @@ export async function uploadDocument(file: File, purpose: UploadPurpose) {
   const response = recordValue(rawSignature);
   const signature = recordValue(unwrapData<unknown>(rawSignature));
   const payload = recordValue(signature.uploadPayload ?? signature.upload ?? signature.data ?? signature);
-  const media = recordValue(payload.media ?? payload.asset ?? signature.media ?? signature.asset);
+  const media = recordValue(signature.media ?? signature.asset ?? payload.media ?? payload.asset);
   const records = [...nestedRecords(payload), ...nestedRecords(media), ...nestedRecords(signature), ...nestedRecords(response)];
   const explicitUploadUrl = firstString(records, ["uploadUrl", "signedUploadUrl", "signedUrl", "upload_url", "signed_upload_url", "uploadEndpoint", "url"]);
   const uploadUrl = explicitUploadUrl
@@ -345,7 +345,7 @@ export async function uploadDocument(file: File, purpose: UploadPurpose) {
       const resourceType = file.type === "application/pdf" || !file.type.startsWith("image/") ? "auto" : "image";
       return `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/${resourceType}/upload`;
     })();
-  const mediaId = firstString(records, ["mediaId", "media_id", "mediaReference", "media_reference", "mediaKey", "media_key", "id", "assetId", "asset_id", "resourceId", "resource_id", "publicId", "public_id"]);
+  const mediaId = firstString([media, ...records], ["mediaId", "media_id", "mediaReference", "media_reference", "mediaKey", "media_key", "id", "assetId", "asset_id", "resourceId", "resource_id", "publicId", "public_id"]);
   if (!uploadUrl || !mediaId) {
     const returnedKeys = [...new Set(records.flatMap((record) => Object.keys(record)))].slice(0, 12).join(", ");
     throw new Error(`The upload service returned an incomplete ${purpose.toLowerCase().replaceAll("_", " ")} upload payload${returnedKeys ? ` (received: ${returnedKeys})` : ""}. Please try again.`);
@@ -353,7 +353,7 @@ export async function uploadDocument(file: File, purpose: UploadPurpose) {
 
   const body = new FormData();
   const fields = recordValue(payload.fields ?? payload.uploadFields ?? payload.formData ?? payload.form_fields);
-  const signedKeys = ["api_key", "timestamp", "signature", "public_id", "folder", "context"] as const;
+  const signedKeys = ["api_key", "timestamp", "signature", "public_id", "folder", "upload_preset", "expires_at", "context"] as const;
   for (const key of signedKeys) {
     const value = firstValue([payload, fields, ...records], key);
     if (value !== undefined) body.append(key, cloudinaryFieldValue(value));

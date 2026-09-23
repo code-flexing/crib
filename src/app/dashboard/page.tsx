@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { RestrictedActionModal } from "@/components/dashboard/RestrictedActionModal";
 import { Button } from "@/components/ui/Button";
-import { apiFetch, displayName, getCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, resolveMediaUrl, type AccountStatus, type PageStatus } from "@/lib/api";
+import { apiFetch, cachedApiFetch, cachedCurrentUser, displayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, resolveMediaUrl, type AccountStatus, type PageStatus } from "@/lib/api";
 
 type Listing = { id: string; title?: string; description?: string; price?: number; address?: string; campus?: string; photos?: string[]; images?: string[] };
 type Profile = { displayName?: unknown; email?: string; role?: string; profilePicture?: string; studentProfileStatus?: unknown };
@@ -37,14 +37,17 @@ export default function DashboardPage() {
       return;
     }
 
+    const cachedProfile = getCachedCurrentUser<Profile>();
+    if (cachedProfile) setProfile(cachedProfile);
+
     void Promise.all([
-      getCurrentUser<Profile>(),
-      apiFetch<StudentProfile>("/api/v1/student-profiles/me").catch(() => null),
-      apiFetch<unknown>("/api/v1/student-profiles/status").catch(() => null),
-      apiFetch<ProviderPage>("/api/v1/provider-pages/me").catch(() => null),
-      apiFetch<Listing[]>("/api/v1/listings").catch(() => []),
-      apiFetch<Listing[]>("/api/v1/listings/bookmarks").catch(() => []),
-      apiFetch<unknown>("/api/v1/support/conversations").catch(() => []),
+      cachedCurrentUser<Profile>(),
+      cachedApiFetch<StudentProfile>("/api/v1/student-profiles/me").catch(() => null),
+      cachedApiFetch<unknown>("/api/v1/student-profiles/status").catch(() => null),
+      cachedApiFetch<ProviderPage>("/api/v1/provider-pages/me").catch(() => null),
+      cachedApiFetch<Listing[]>("/api/v1/listings").catch(() => []),
+      cachedApiFetch<Listing[]>("/api/v1/listings/bookmarks").catch(() => []),
+      cachedApiFetch<unknown>("/api/v1/support/conversations").catch(() => []),
     ]).then(async ([user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations]) => {
       setProfile(user);
       setProfileImage(await resolveMediaUrl(user.profilePicture ?? studentProfile?.profilePicture));

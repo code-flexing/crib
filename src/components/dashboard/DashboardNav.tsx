@@ -22,9 +22,7 @@ const items = [
 export function DashboardNav({ onCreatePage, onSignOut, pageStatus, canManagePage = true, displayName, profileImage }: DashboardNavProps) {
   const pathname = usePathname();
   const pageLabel = pageStatus === "none" ? "Page" : "My Page";
-  const initials = (displayName ?? "P").trim().slice(0, 1).toUpperCase();
-
-  const avatar = (size: string, pixels: number) => profileImage ? <Image src={profileImage} alt="" width={pixels} height={pixels} unoptimized className={`${size} rounded-full object-cover`} /> : <span className={`${size} flex items-center justify-center rounded-full bg-safecrib-green text-xs font-semibold text-safecrib-white`}>{initials}</span>;
+  const avatar = (size: string, pixels: number) => profileImage ? <Image src={profileImage} alt="" width={pixels} height={pixels} unoptimized className={`${size} rounded-full object-cover`} /> : <span className={`${size} flex items-center justify-center rounded-full border border-safecrib-green/25 bg-safecrib-green/10 text-safecrib-green`} aria-label={displayName ? `${displayName} profile image` : "Add a profile image"}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-1/2 w-1/2 fill-none stroke-current" strokeWidth="1.8"><circle cx="12" cy="8" r="3.5" /><path d="M4.8 20c.9-3.3 3.3-5 7.2-5s6.3 1.7 7.2 5" strokeLinecap="round" /></svg></span>;
 
   return (
     <header className="border-b border-black/10 bg-safecrib-white md:sticky md:top-0 md:z-40">

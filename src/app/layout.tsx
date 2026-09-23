@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Manrope } from "next/font/google";
-import { InitialPageLoader } from "@/components/loading/InitialPageLoader";
 import { NetworkMonitor } from "@/components/network/NetworkMonitor";
 import { PWAProvider } from "@/components/pwa/PWAProvider";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
@@ -43,7 +42,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${manrope.variable} ${dmSans.variable}`}>
       <body className={`${dmSans.className} bg-safecrib-white font-sans text-safecrib-black antialiased`}>
         <PWAProvider>
-          <InitialPageLoader />
           <NetworkMonitor />
           {children}
           <InstallPrompt />

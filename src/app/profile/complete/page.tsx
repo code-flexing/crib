@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { Button } from "@/components/ui/Button";
-import { apiFetch, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, uploadDocument, type AccountStatus, type PageStatus } from "@/lib/api";
+import { apiFetch, cachedApiFetch, cachedCurrentUser, clearClientCache, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, uploadDocument, type AccountStatus, type PageStatus } from "@/lib/api";
 
 type StudentProfile = {
   displayName?: string;
@@ -55,6 +55,7 @@ export default function CompleteStudentProfilePage() {
   const [uploadingStudentship, setUploadingStudentship] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     if (!localStorage.getItem("safecrib_access_token")) {
@@ -63,10 +64,10 @@ export default function CompleteStudentProfilePage() {
     }
 
     void Promise.all([
-      apiFetch<User>("/api/v1/users/me"),
-      apiFetch<StudentProfile | null>("/api/v1/student-profiles/me").catch(() => null),
-      apiFetch<unknown>("/api/v1/student-profiles/status").catch(() => null),
-      apiFetch<{ status?: string }>("/api/v1/provider-pages/me").catch(() => null),
+      cachedCurrentUser<User>(),
+      cachedApiFetch<StudentProfile | null>("/api/v1/student-profiles/me").catch(() => null),
+      cachedApiFetch<unknown>("/api/v1/student-profiles/status").catch(() => null),
+      cachedApiFetch<{ status?: string }>("/api/v1/provider-pages/me").catch(() => null),
     ]).then(([user, studentProfile, statusResponse, page]) => {
       const rawStatus = typeof user.studentProfileStatus === "object" && user.studentProfileStatus !== null && "status" in user.studentProfileStatus
         ? user.studentProfileStatus.status
@@ -118,6 +119,7 @@ export default function CompleteStudentProfilePage() {
         method: "POST",
         body: JSON.stringify({ ...form, socialLinks: { linkedin: form.linkedin, website: form.website } }),
       });
+      clearClientCache("/api/v1/auth/me", "/api/v1/student-profiles/me", "/api/v1/student-profiles/status");
       router.replace("/dashboard");
     } catch {
       setError("We could not submit your profile for review. Check the required fields and try again.");
@@ -140,6 +142,20 @@ export default function CompleteStudentProfilePage() {
   );
   const studentshipDocument = <label className="block text-sm font-medium text-safecrib-black"><span>Proof of studentship document *</span><input required={!form.proofOfStudentship} type="file" accept="application/pdf,image/*" disabled={uploadingStudentship} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadStudentship(file); }} className="mt-2 block w-full text-sm font-normal text-black/65" />{form.proofOfStudentship && <span className="mt-2 block text-xs font-normal text-safecrib-green">Document uploaded.</span>}</label>;
   const avatarInput = <label className="block text-sm font-medium text-safecrib-black"><span>Profile image *</span><input required={!form.profilePicture} type="file" accept="image/*" disabled={uploadingAvatar} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAvatar(file); }} className="mt-2 block w-full text-sm font-normal text-black/65" />{form.profilePicture && <span className="mt-2 block text-xs font-normal text-safecrib-green">Profile image uploaded.</span>}</label>;
+  const nextStep = () => setStep((current) => Math.min(current + 1, 4));
+  const previousStep = () => setStep((current) => Math.max(current - 1, 0));
+  const validate = () => {
+    if (step === 1 && (!form.displayName || !form.schoolOfStudy || !form.courseOfStudy || !form.level)) {
+      setError("Complete the required details before continuing.");
+      return false;
+    }
+    if (step === 2 && (!form.proofOfStudentship || !form.profilePicture)) {
+      setError("Upload your studentship document and profile image before continuing.");
+      return false;
+    }
+    setError("");
+    return true;
+  };
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
@@ -150,23 +166,15 @@ export default function CompleteStudentProfilePage() {
         <p className="mt-3 max-w-xl text-sm leading-6 text-black/60">Submit your student details for admin review. Your account can browse homes while this is being reviewed.</p>
         {status === "pending" && <p className="mt-6 rounded-[4px] border border-black/10 bg-white p-4 text-sm text-black/65">Your profile is under review. You can update it after a decision.</p>}
         {status === "rejected" && <div className="mt-6 rounded-[4px] border border-red-200 bg-red-50 p-4 text-sm text-red-700"><p>Your profile was not approved. Update the details below and resubmit.</p>{rejectionReason && <p className="mt-2">Reason: {rejectionReason}</p>}</div>}
-        <form onSubmit={submit} className="mt-8 grid gap-5 rounded-[12px] border border-black/10 bg-white p-6 shadow-[0_18px_40px_rgba(11,12,14,0.05)] sm:grid-cols-2">
-          {input("displayName", "Display name", true)}
-          {input("schoolOfStudy", "School of study", true)}
-          {input("courseOfStudy", "Course of study", true)}
-          {input("level", "Level", true)}
-          {studentshipDocument}
-          {avatarInput}
-          <label className="block text-sm font-medium text-safecrib-black"><span>Cover photo</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingCover} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCover(file); }} className="mt-2 block w-full text-sm font-normal text-black/65" />{form.coverPhoto && <span className="mt-2 block text-xs font-normal text-safecrib-green">Cover photo uploaded.</span>}</label>
-          {input("dateOfBirth", "Date of birth")}
-          {input("gender", "Gender")}
-          {input("phoneNumber", "Phone number")}
-          {input("emergencyContact", "Emergency contact")}
-          {input("linkedin", "LinkedIn link")}
-          {input("website", "Website link")}
+        {step === 0 ? <div className="mt-8 rounded-[12px] border border-black/10 bg-white p-6 shadow-[0_18px_40px_rgba(11,12,14,0.05)]"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Student profile</p><h2 className="mt-3 text-2xl font-medium text-safecrib-black">Set up your profile in four steps</h2><p className="mt-3 text-sm leading-6 text-black/60">Add your details, verification document, profile image, and contact information one step at a time.</p><Button type="button" className="mt-6" onClick={nextStep}>Start your profile</Button></div> : <form onSubmit={submit} className="mt-8 grid gap-5 rounded-[12px] border border-black/10 bg-white p-6 shadow-[0_18px_40px_rgba(11,12,14,0.05)] sm:grid-cols-2">
+          <div className="sm:col-span-2"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Step {step} of 4</p><div className="mt-3 h-2 overflow-hidden rounded-full bg-black/5"><div className="h-full rounded-full bg-safecrib-green transition-all" style={{ width: `${(step / 4) * 100}%` }} /></div></div>
+          {step === 1 && <>{input("displayName", "Display name", true)}{input("schoolOfStudy", "School of study", true)}{input("courseOfStudy", "Course of study", true)}{input("level", "Level", true)}</>}
+          {step === 2 && <>{studentshipDocument}{avatarInput}<label className="block text-sm font-medium text-safecrib-black"><span>Cover photo</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingCover} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCover(file); }} className="mt-2 block w-full text-sm font-normal text-black/65" />{form.coverPhoto && <span className="mt-2 block text-xs font-normal text-safecrib-green">Cover photo uploaded.</span>}</label></>}
+          {step === 3 && <>{input("dateOfBirth", "Date of birth")}{input("gender", "Gender")}{input("phoneNumber", "Phone number")}{input("emergencyContact", "Emergency contact")}</>}
+          {step === 4 && <>{input("linkedin", "LinkedIn link")}{input("website", "Website link")}</>}
           {error && <p className="sm:col-span-2 text-sm text-red-600" role="alert">{error}</p>}
-          <div className="sm:col-span-2"><Button type="submit" loading={saving || uploadingStudentship || uploadingAvatar || uploadingCover} disabled={status === "pending"}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button></div>
-        </form>
+          <div className="sm:col-span-2 flex items-center justify-between gap-3"><Button type="button" variant="secondary" onClick={previousStep}>Back</Button>{step < 4 ? <Button type="button" onClick={() => { if (validate()) nextStep(); }}>Next</Button> : <Button type="submit" loading={saving || uploadingStudentship || uploadingAvatar || uploadingCover} disabled={status === "pending"}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button>}</div>
+        </form>}
       </section>
     </main>
   );

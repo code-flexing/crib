@@ -97,6 +97,55 @@ export async function getCurrentUser<T>() {
   }
 }
 
+const clientCachePrefix = "safecrib_cache:";
+
+function cacheKey(path: string) {
+  return `${clientCachePrefix}${path}`;
+}
+
+function readClientCache<T>(path: string): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const value = localStorage.getItem(cacheKey(path));
+    return value ? JSON.parse(value) as T : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getCachedCurrentUser<T>() {
+  return readClientCache<T>("/api/v1/users/me") ?? readClientCache<T>("/api/v1/auth/me");
+}
+
+function writeClientCache(path: string, value: unknown) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(cacheKey(path), JSON.stringify(value)); } catch { /* Storage may be unavailable or full. */ }
+}
+
+export function clearClientCache(...paths: string[]) {
+  if (typeof window === "undefined") return;
+  paths.forEach((path) => localStorage.removeItem(cacheKey(path)));
+}
+
+export async function cachedApiFetch<T>(path: string, init: RequestInit = {}) {
+  const cached = init.method && init.method !== "GET" ? null : readClientCache<T>(path);
+  const request = apiFetch<T>(path, init).then((value) => {
+    if (!init.method || init.method === "GET") writeClientCache(path, value);
+    return value;
+  });
+  return cached ?? request;
+}
+
+export async function cachedCurrentUser<T>() {
+  const cached = getCachedCurrentUser<T>();
+  const request = getCurrentUser<T>().then((value) => {
+    writeClientCache("/api/v1/users/me", value);
+    writeClientCache("/api/v1/auth/me", value);
+    return value;
+  });
+  return cached ?? request;
+}
+
 function extractTokens(value: unknown): { accessToken: string; refreshToken: string } | null {
   if (typeof value !== "object" || value === null) return null;
   const response = value as Record<string, unknown>;

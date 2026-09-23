@@ -1,12 +1,7 @@
 {
   "/manifest.webmanifest/route": "app/manifest.webmanifest/route.js",
   "/api/backend/[...path]/route": "app/api/backend/[...path]/route.js",
-  "/api/auth/login/route": "app/api/auth/login/route.js",
-  "/login/page": "app/login/page.js",
-  "/support/[id]/page": "app/support/[id]/page.js",
+  "/page": "app/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/support/page": "app/support/page.js",
-  "/admin/support/page": "app/admin/support/page.js",
-  "/admin/login/page": "app/admin/login/page.js",
-  "/admin/support/[id]/page": "app/admin/support/[id]/page.js"
+  "/profile/page": "app/profile/page.js"
 }

@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { Button } from "@/components/ui/Button";
+import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
 import { ApiError, apiFetch, cachedApiFetch, cachedCurrentUser, cancelPendingUpload, clearClientCache, clearPendingUploads, getPendingUpload, getPendingUploads, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, uploadDocument, type AccountStatus, type PageStatus, type PendingUpload } from "@/lib/api";
 
 type StudentProfile = {
@@ -25,8 +26,9 @@ type StudentProfile = {
   reason?: string;
 };
 
-type User = { displayName?: string; studentProfileStatus?: unknown; role?: string };
+type User = { id?: string; email?: string; displayName?: string; studentProfileStatus?: unknown; role?: string };
 type FormState = Omit<StudentProfile, "status" | "rejectionReason" | "reason" | "socialLinks"> & { linkedin: string; website: string };
+type ProfileDraft = { form: FormState; step: number };
 
 type UploadAccordionProps = {
   title: string;
@@ -98,6 +100,11 @@ const emptyForm: FormState = {
   website: "",
 };
 
+function profileDraftKey(user: User) {
+  const owner = user.id ?? user.email ?? "current";
+  return `safecrib:draft:student-profile:v1:${owner}`;
+}
+
 export default function CompleteStudentProfilePage() {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -112,6 +119,9 @@ export default function CompleteStudentProfilePage() {
   const [step, setStep] = useState(0);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [cancellingUpload, setCancellingUpload] = useState<string | null>(null);
+  const [draftKey, setDraftKey] = useState<string | null>(null);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem("safecrib_access_token")) {
@@ -125,15 +135,23 @@ export default function CompleteStudentProfilePage() {
       cachedApiFetch<unknown>("/api/v1/student-profiles/status").catch(() => null),
       cachedApiFetch<{ status?: string }>("/api/v1/provider-pages/me").catch(() => null),
     ]).then(([user, studentProfile, statusResponse, page]) => {
+      const currentDraftKey = profileDraftKey(user);
+      const draft = readDraft<ProfileDraft>(currentDraftKey);
       const rawStatus = typeof user.studentProfileStatus === "object" && user.studentProfileStatus !== null && "status" in user.studentProfileStatus
         ? user.studentProfileStatus.status
         : statusResponse && typeof statusResponse === "object" && "status" in statusResponse ? statusResponse.status : statusResponse;
       setStatus(normalizeAccountStatus(rawStatus));
       setPageStatus(normalizePageStatus(page?.status));
+      setDraftKey(currentDraftKey);
+      setDraftRestored(Boolean(draft));
+      setDraftHydrated(true);
       if (studentProfile) {
-        setForm((current) => ({ ...current, ...studentProfile, linkedin: studentProfile.socialLinks?.linkedin ?? "", website: studentProfile.socialLinks?.website ?? "" }));
+        setForm((current) => ({ ...current, ...studentProfile, linkedin: studentProfile.socialLinks?.linkedin ?? "", website: studentProfile.socialLinks?.website ?? "", ...draft?.form }));
         setRejectionReason(studentProfile.rejectionReason ?? studentProfile.reason ?? "");
+      } else if (draft) {
+        setForm(draft.form);
       }
+      if (draft) setStep(Math.min(Math.max(draft.step, 0), 4));
     }).catch((loadError: unknown) => {
       if (isUnauthorizedError(loadError)) {
         localStorage.removeItem("safecrib_access_token");
@@ -143,8 +161,15 @@ export default function CompleteStudentProfilePage() {
       }
       setStatus("not_submitted");
       setPageStatus("none");
+      setDraftHydrated(true);
     });
   }, [router]);
+
+  useEffect(() => {
+    if (!draftKey || !draftHydrated) return;
+    const timeout = window.setTimeout(() => writeDraft<ProfileDraft>(draftKey, { form, step }), 400);
+    return () => window.clearTimeout(timeout);
+  }, [draftHydrated, draftKey, form, step]);
 
   const update = (field: keyof FormState, value: string) => setForm((current) => ({ ...current, [field]: value }));
   const uploadStudentship = async (file: File) => {
@@ -191,6 +216,7 @@ export default function CompleteStudentProfilePage() {
       });
       clearClientCache("/api/v1/auth/me", "/api/v1/student-profiles/me", "/api/v1/student-profiles/status");
       clearPendingUploads();
+      if (draftKey) removeDraft(draftKey);
       router.replace("/dashboard");
     } catch {
       setError("We could not submit your profile for review. Check the required fields and try again.");
@@ -204,6 +230,13 @@ export default function CompleteStudentProfilePage() {
     localStorage.removeItem("safecrib_access_token");
     localStorage.removeItem("safecrib_refresh_token");
     router.replace("/login");
+  };
+  const discardDraft = () => {
+    if (draftKey) removeDraft(draftKey);
+    setForm(emptyForm);
+    setStep(0);
+    setDraftRestored(false);
+    setError("");
   };
   const input = (field: keyof FormState, label: string, required = false, type = "text") => (
     <label className="block text-sm font-medium text-safecrib-black">
@@ -229,6 +262,7 @@ export default function CompleteStudentProfilePage() {
         <Link href="/dashboard" className="text-sm font-medium text-safecrib-green hover:underline">Back to home</Link>
         <h1 className="mt-6 text-3xl font-medium text-safecrib-black">Complete your student profile</h1>
         <p className="mt-3 max-w-xl text-sm leading-6 text-black/60">Submit your student details for admin review. Your account can browse homes while this is being reviewed.</p>
+        {draftRestored && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[8px] border border-safecrib-green/20 bg-[#EAF7F1] px-4 py-3 text-sm text-safecrib-green"><span>Draft restored. Your progress is saved on this device.</span><Button type="button" variant="secondary" className="border-safecrib-green/30 px-3 py-2 text-xs text-safecrib-green" onClick={discardDraft}>Discard draft</Button></div>}
         {status === "pending" && <p className="mt-6 rounded-[4px] border border-black/10 bg-white p-4 text-sm text-black/65">Your profile is under review. You can update it after a decision.</p>}
         {status === "rejected" && <div className="mt-6 rounded-[4px] border border-red-200 bg-red-50 p-4 text-sm text-red-700"><p>Your profile was not approved. Update the details below and resubmit.</p>{rejectionReason && <p className="mt-2">Reason: {rejectionReason}</p>}</div>}
         {step === 0 ? <div className="mt-8 rounded-[12px] border border-black/10 bg-white p-6 shadow-[0_18px_40px_rgba(11,12,14,0.05)]"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Student profile</p><h2 className="mt-3 text-2xl font-medium text-safecrib-black">Set up your profile in four steps</h2><p className="mt-3 text-sm leading-6 text-black/60">Add your details, verification document, profile image, and contact information one step at a time.</p><Button type="button" className="mt-6" onClick={nextStep}>Start your profile</Button></div> : <form onSubmit={submit} className="mt-8 grid gap-5 rounded-[12px] border border-black/10 bg-white p-6 shadow-[0_18px_40px_rgba(11,12,14,0.05)] sm:grid-cols-2">

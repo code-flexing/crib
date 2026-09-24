@@ -18,10 +18,11 @@ const VARIANTS: Record<ButtonVariant, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = "primary", className, children, loading = false, disabled, ...props }, ref) => {
+  ({ variant = "primary", className, children, loading = false, disabled, type = "button", ...props }, ref) => {
     return (
       <button
         ref={ref}
+        type={type}
         className={`${BASE} ${VARIANTS[variant]} ${className ?? ""}`}
         disabled={disabled || loading}
         aria-busy={loading}

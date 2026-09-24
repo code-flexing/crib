@@ -5,12 +5,13 @@ async function forward(request: Request, path: string[]) {
   const headers = new Headers();
   const authorization = request.headers.get("authorization");
   if (authorization) headers.set("authorization", authorization);
-  if (request.method !== "GET") headers.set("content-type", request.headers.get("content-type") ?? "application/json");
+  const contentType = request.headers.get("content-type");
+  if (contentType) headers.set("content-type", contentType);
 
   const response = await fetch(target, {
     method: request.method,
     headers,
-    body: request.method === "GET" ? undefined : await request.text(),
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
   });
 
   const responseBody = response.status === 204 ? null : await response.text();

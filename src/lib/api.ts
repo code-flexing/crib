@@ -207,7 +207,7 @@ async function requestApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = typeof window === "undefined" ? null : localStorage.getItem("safecrib_access_token");
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   let response = await fetch(`/api/backend${path}`, { ...init, headers });
@@ -248,42 +248,7 @@ function recordValue(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
 }
 
-function nestedRecords(value: unknown, depth = 0): Record<string, unknown>[] {
-  if (depth > 3 || typeof value !== "object" || value === null) return [];
-  const record = recordValue(value);
-  const nested = Object.values(record).flatMap((child) => nestedRecords(child, depth + 1));
-  return [record, ...nested];
-}
-
-function firstString(records: Record<string, unknown>[], keys: string[]) {
-  for (const record of records) {
-    for (const key of keys) {
-      if (typeof record[key] === "string" && record[key]) return record[key];
-      if (typeof record[key] === "number" && Number.isFinite(record[key])) return String(record[key]);
-    }
-  }
-  return null;
-}
-
-function cloudinaryFieldValue(value: unknown) {
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
-  if (typeof value === "object" && value !== null) {
-    return Object.entries(value as Record<string, unknown>)
-      .filter(([, entry]) => entry !== undefined && entry !== null)
-      .map(([key, entry]) => `${key}=${String(entry)}`)
-      .join("|");
-  }
-  return String(value);
-}
-
-function firstValue(records: Record<string, unknown>[], key: string) {
-  for (const record of records) {
-    if (record[key] !== undefined && record[key] !== null) return record[key];
-  }
-  return undefined;
-}
-
-type UploadPurpose = "AVATAR" | "COVER_PHOTO" | "PROOF_OF_LICENSE" | "PROOF_OF_STUDENTSHIP";
+export type UploadPurpose = "AVATAR" | "COVER_PHOTO" | "LISTING_PHOTO" | "LISTING_VIDEO" | "PROVIDER_LOGO" | "STUDENT_ID" | "PROOF_OF_STUDENTSHIP" | "PROOF_OF_LICENSE" | "CONTRACT_DOCUMENT";
 
 export type PendingUpload = {
   id: string;
@@ -311,68 +276,20 @@ export async function cancelPendingUpload(id: string) {
   }
 }
 
-export async function uploadDocument(file: File, purpose: UploadPurpose) {
-  if (typeof window !== "undefined") {
-    const existingUpload = localStorage.getItem(`${pendingUploadPrefix}${purpose}`);
-    if (existingUpload) {
-      try {
-        const draft = JSON.parse(existingUpload) as { id?: string; fingerprint?: string };
-        if (draft.id && draft.fingerprint === uploadFingerprint(file)) return draft.id;
-      } catch {
-        localStorage.removeItem(`${pendingUploadPrefix}${purpose}`);
-      }
-    }
-  }
-  const signaturePath = purpose === "AVATAR"
-    ? "/api/v1/media/profile-picture/upload-signature"
-    : purpose === "COVER_PHOTO"
-      ? "/api/v1/media/cover-photo/upload-signature"
-      : "/api/v1/media/upload-signature";
-  const rawSignature = await apiFetch<unknown>(signaturePath, {
-    method: "POST",
-    body: JSON.stringify({ ...(signaturePath === "/api/v1/media/upload-signature" ? { purpose } : {}), contentType: file.type, sizeBytes: file.size }),
-  });
-  const response = recordValue(rawSignature);
-  const signature = recordValue(unwrapData<unknown>(rawSignature));
-  const payload = recordValue(signature.uploadPayload ?? signature.upload ?? signature.data ?? signature);
-  const media = recordValue(signature.media ?? signature.asset ?? payload.media ?? payload.asset);
-  const records = [...nestedRecords(payload), ...nestedRecords(media), ...nestedRecords(signature), ...nestedRecords(response)];
-  const explicitUploadUrl = firstString(records, ["uploadUrl", "signedUploadUrl", "signedUrl", "upload_url", "signed_upload_url", "uploadEndpoint", "url"]);
-  const uploadUrl = explicitUploadUrl
-    ?? (() => {
-      const cloudName = firstString(records, ["cloud_name", "cloudName"]);
-      if (!cloudName) return null;
-      const resourceType = file.type === "application/pdf" || !file.type.startsWith("image/") ? "auto" : "image";
-      return `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/${resourceType}/upload`;
-    })();
-  const mediaId = firstString([media, ...records], ["mediaId", "media_id", "mediaReference", "media_reference", "mediaKey", "media_key", "id", "assetId", "asset_id", "resourceId", "resource_id", "publicId", "public_id"]);
-  if (!uploadUrl || !mediaId) {
-    const returnedKeys = [...new Set(records.flatMap((record) => Object.keys(record)))].slice(0, 12).join(", ");
-    throw new Error(`The upload service returned an incomplete ${purpose.toLowerCase().replaceAll("_", " ")} upload payload${returnedKeys ? ` (received: ${returnedKeys})` : ""}. Please try again.`);
-  }
-
+export async function uploadDocument(file: File, purpose: UploadPurpose, entityId?: string) {
   const body = new FormData();
-  const fields = recordValue(payload.fields ?? payload.uploadFields ?? payload.formData ?? payload.form_fields);
-  const signedKeys = ["api_key", "timestamp", "signature", "public_id", "folder", "upload_preset", "expires_at", "context"] as const;
-  for (const key of signedKeys) {
-    const value = firstValue([payload, fields, ...records], key);
-    if (value !== undefined) body.append(key, cloudinaryFieldValue(value));
-  }
   body.append("file", file);
-  try {
-    const uploadResponse = await fetch(uploadUrl, { method: "POST", body });
-    if (!uploadResponse.ok) {
-      const uploadError = await uploadResponse.json().catch(() => null) as { error?: { message?: string }; message?: string } | null;
-      const message = uploadError?.error?.message ?? uploadError?.message ?? `Upload rejected (${uploadResponse.status}).`;
-      throw new Error(`The ${purpose.toLowerCase().replaceAll("_", " ")} upload failed: ${message}`);
-    }
-    await apiFetch(`/api/v1/media/${mediaId}/confirm`, { method: "POST", body: JSON.stringify({ assetId: mediaId, bytes: file.size, format: file.name.split(".").pop() ?? "" }) });
-  } catch (error) {
-    await apiFetch(`/api/v1/media/${mediaId}`, { method: "DELETE" }).catch(() => undefined);
-    throw error;
+  body.append("purpose", purpose);
+  if (entityId) body.append("entityId", entityId);
+
+  const response = await apiFetch<{ url?: string }>("/api/v1/media/upload", {
+    method: "POST",
+    body,
+  });
+  if (typeof response.url !== "string" || !response.url) {
+    throw new Error(`The ${purpose.toLowerCase().replaceAll("_", " ")} upload did not return a media URL.`);
   }
-  if (typeof window !== "undefined") localStorage.setItem(`${pendingUploadPrefix}${purpose}`, JSON.stringify({ id: mediaId, fingerprint: uploadFingerprint(file) }));
-  return mediaId;
+  return response.url;
 }
 
 export async function resolveMediaUrl(reference: unknown): Promise<string | null> {

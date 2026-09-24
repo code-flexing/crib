@@ -26,7 +26,7 @@ export function SafeCribLoader({
   className,
   isExiting = false,
 }: SafeCribLoaderProps) {
-  const dimension = fullscreen ? DIMENSIONS.lg : DIMENSIONS[size];
+  const dimension = fullscreen ? 72 : DIMENSIONS[size];
 
   const mark = (
     <Image

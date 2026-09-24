@@ -146,45 +146,34 @@ body {
 .safecrib-loader {
   display: block;
   object-fit: contain;
-  animation: safecrib-logo-pulse 1.2s ease-in-out infinite;
+  animation: safecrib-logo-pulse 1.6s ease-in-out infinite;
   will-change: transform, opacity;
 }
 
 .safecrib-loader--exiting {
-  animation: safecrib-logo-pulse 1.2s ease-in-out infinite, safecrib-logo-exit 0.35s ease-in forwards;
+  animation: safecrib-logo-pulse 1.6s ease-in-out infinite, safecrib-logo-exit 0.42s ease-in forwards;
 }
 
 @keyframes safecrib-logo-pulse {
   0%,
   100% {
-    opacity: 0.55;
-    transform: scale(0.9);
+    opacity: 0.65;
+    transform: scale(0.94);
   }
   50% {
     opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes safecrib-logo-enter {
-  0% {
-    opacity: 0;
-    transform: scale(0.82);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
+    transform: scale(1.03);
   }
 }
 
 @keyframes safecrib-logo-exit {
   0% {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1.03);
   }
   100% {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale(0.94);
   }
 }
 
@@ -195,32 +184,36 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.97);
-  backdrop-filter: blur(2px);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(1.5px);
   padding-top: var(--safe-area-top);
   padding-bottom: var(--safe-area-bottom);
-  animation: safecrib-loader-fade-in 0.35s ease-out;
+  animation: safecrib-loader-fade-in 0.42s ease-out;
 }
 
 .safecrib-loader-overlay.is-exiting {
-  animation: safecrib-loader-fade-out 0.35s ease-in forwards;
+  animation: safecrib-loader-fade-out 0.42s ease-in forwards;
 }
 
 @keyframes safecrib-loader-fade-in {
   0% {
     opacity: 0;
+    transform: scale(0.98);
   }
   100% {
     opacity: 1;
+    transform: scale(1);
   }
 }
 
 @keyframes safecrib-loader-fade-out {
   0% {
     opacity: 1;
+    transform: scale(1);
   }
   100% {
     opacity: 0;
+    transform: scale(0.98);
   }
 }
 

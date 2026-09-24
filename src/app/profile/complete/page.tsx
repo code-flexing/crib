@@ -259,7 +259,10 @@ export default function CompleteStudentProfilePage() {
       <input required={required} type={type} value={form[field] ?? ""} onChange={(event) => update(field, event.target.value)} className="mt-2 w-full rounded-[8px] border border-black/15 px-4 py-3 font-normal text-safecrib-black focus:border-safecrib-green focus:outline-none" />
     </label>
   );
-  const nextStep = () => setStep((current) => Math.min(current + 1, 4));
+  const nextStep = () => {
+    if (step === 1 && !validate()) return;
+    setStep((current) => Math.min(current + 1, 4));
+  };
   const previousStep = () => setStep((current) => Math.max(current - 1, 0));
   const validate = () => {
     if (step === 1 && (!form.displayName || !form.schoolOfStudy || !form.courseOfStudy || !form.level)) {
@@ -268,6 +271,14 @@ export default function CompleteStudentProfilePage() {
     }
     setError("");
     return true;
+  };
+  const handleFormSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (step !== 4) {
+      setError("Complete the final step before submitting your profile for review.");
+      return;
+    }
+    await submit(event);
   };
 
   return (
@@ -287,7 +298,14 @@ export default function CompleteStudentProfilePage() {
           {step === 3 && <>{input("dateOfBirth", "Date of birth", false, "date")}{input("gender", "Gender")}{input("phoneNumber", "Phone number")}{input("emergencyContact", "Emergency contact")}</>}
           {step === 4 && <>{input("linkedin", "LinkedIn link")}{input("website", "Website link")}</>}
           {error && <p className="sm:col-span-2 text-sm text-red-600" role="alert">{error}</p>}
-          <div className="sm:col-span-2 flex items-center justify-between gap-3"><Button type="button" variant="secondary" onClick={previousStep}>Back</Button>{step < 4 ? <Button type="button" onClick={() => { if (step === 1 && !validate()) return; nextStep(); }}>Next</Button> : <Button type="submit" loading={saving} disabled={status === "pending" || uploadingStudentship || uploadingAvatar || uploadingCover}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button>}</div>
+          <div className="sm:col-span-2 flex items-center justify-between gap-3">
+            <Button type="button" variant="secondary" onClick={previousStep}>Back</Button>
+            {step < 4 ? (
+              <Button type="button" onClick={() => { if (step === 1 && !validate()) return; nextStep(); }}>Next</Button>
+            ) : (
+              <Button type="submit" loading={saving} disabled={status === "pending" || uploadingStudentship || uploadingAvatar || uploadingCover}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button>
+            )}
+          </div>
         </form>}
       </section>
     </main>

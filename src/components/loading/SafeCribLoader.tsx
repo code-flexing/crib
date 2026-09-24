@@ -9,6 +9,7 @@ type SafeCribLoaderProps = {
   /** Announced to assistive tech in place of the default "Loading" label. */
   label?: string;
   className?: string;
+  isExiting?: boolean;
 };
 
 const DIMENSIONS: Record<SafeCribLoaderSize, number> = {
@@ -23,12 +24,13 @@ export function SafeCribLoader({
   fullscreen = false,
   label = "Loading",
   className,
+  isExiting = false,
 }: SafeCribLoaderProps) {
   const dimension = fullscreen ? DIMENSIONS.lg : DIMENSIONS[size];
 
   const mark = (
     <Image
-      className={`safecrib-loader ${className ?? ""}`}
+      className={`safecrib-loader ${className ?? ""} ${isExiting ? "safecrib-loader--exiting" : ""}`.trim()}
       src="/logo.png"
       width={dimension}
       height={dimension}
@@ -40,7 +42,12 @@ export function SafeCribLoader({
   if (!fullscreen) return mark;
 
   return (
-    <div className="safecrib-loader-overlay" role="status" aria-live="polite">
+    <div
+      className={`safecrib-loader-overlay ${isExiting ? "is-exiting" : "is-entering"}`.trim()}
+      role="status"
+      aria-live="polite"
+      aria-label={label}
+    >
       {mark}
     </div>
   );

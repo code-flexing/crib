@@ -146,18 +146,45 @@ body {
 .safecrib-loader {
   display: block;
   object-fit: contain;
-  animation: safecrib-logo-pulse 1.5s ease-in-out infinite;
+  animation: safecrib-logo-pulse 1.2s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.safecrib-loader--exiting {
+  animation: safecrib-logo-pulse 1.2s ease-in-out infinite, safecrib-logo-exit 0.35s ease-in forwards;
 }
 
 @keyframes safecrib-logo-pulse {
   0%,
   100% {
     opacity: 0.55;
-    transform: scale(0.92);
+    transform: scale(0.9);
   }
   50% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes safecrib-logo-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes safecrib-logo-exit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
   }
 }
 
@@ -168,9 +195,33 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--safecrib-white);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(2px);
   padding-top: var(--safe-area-top);
   padding-bottom: var(--safe-area-bottom);
+  animation: safecrib-loader-fade-in 0.35s ease-out;
+}
+
+.safecrib-loader-overlay.is-exiting {
+  animation: safecrib-loader-fade-out 0.35s ease-in forwards;
+}
+
+@keyframes safecrib-loader-fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes safecrib-loader-fade-out {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 .safecrib-offline-backdrop {

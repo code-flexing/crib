@@ -8,14 +8,21 @@ export function InitialPageLoader() {
     if (typeof window === "undefined") return true;
     return !sessionStorage.getItem("safecrib_initial_loader_seen");
   });
+  const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
-    sessionStorage.setItem("safecrib_initial_loader_seen", "1");
-    const timer = window.setTimeout(() => setVisible(false), 1000);
 
-    return () => window.clearTimeout(timer);
+    sessionStorage.setItem("safecrib_initial_loader_seen", "1");
+
+    const exitTimer = window.setTimeout(() => setIsExiting(true), 1600);
+    const hideTimer = window.setTimeout(() => setVisible(false), 2000);
+
+    return () => {
+      window.clearTimeout(exitTimer);
+      window.clearTimeout(hideTimer);
+    };
   }, [visible]);
 
-  return visible ? <PageLoader label="Loading SafeCrib" /> : null;
+  return visible ? <PageLoader label="Loading SafeCrib" isExiting={isExiting} /> : null;
 }

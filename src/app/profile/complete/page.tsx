@@ -52,7 +52,7 @@ function UploadAccordion({ title, description, accept, format, value, uploading,
   };
 
   return (
-    <details open={required && !value} className="group sm:col-span-2 rounded-[10px] border border-black/10 bg-[#FAFBF9] p-4">
+    <details className="group sm:col-span-2 rounded-[10px] border border-black/10 bg-[#FAFBF9] p-4">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-safecrib-black [&::-webkit-details-marker]:hidden">
         <span className="flex min-w-0 items-center gap-3">
           <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm ${value ? "bg-[#EAF7F1] text-safecrib-green" : "bg-black/[0.05] text-black/55"}`}>

@@ -21,7 +21,7 @@ async function forward(request: Request, path: string[]) {
     headers: { "Content-Type": response.headers.get("content-type") ?? "application/json; charset=utf-8" },
   });
 }
-
+///
 export async function GET(request: Request, context: { params: Promise<{ path: string[] }> }) {
   return forward(request, (await context.params).path);
 }

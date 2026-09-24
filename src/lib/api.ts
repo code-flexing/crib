@@ -23,6 +23,13 @@ export function clearSession() {
   localStorage.removeItem("safecrib_refresh_token");
 }
 
+function expireSession() {
+  clearSession();
+  if (typeof window === "undefined") return;
+  const loginPath = window.location.pathname.startsWith("/admin") ? "/admin/login" : "/login";
+  if (window.location.pathname !== loginPath) window.location.replace(loginPath);
+}
+
 export async function refreshSession() {
   const refreshToken = typeof window === "undefined" ? null : localStorage.getItem("safecrib_refresh_token");
   if (!refreshToken) throw new ApiError(401, "Session expired.");
@@ -237,14 +244,17 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   } catch (error) {
     if (!isUnauthorizedError(error) || typeof window === "undefined" || path === "/api/v1/auth/refresh") throw error;
     const refreshToken = localStorage.getItem("safecrib_refresh_token");
-    if (!refreshToken) throw error;
+    if (!refreshToken) {
+      expireSession();
+      throw error;
+    }
 
     try {
       refreshPromise ??= refreshSession().finally(() => { refreshPromise = null; });
       await refreshPromise;
       return await requestApi<T>(path, init);
     } catch (refreshError) {
-      clearSession();
+      expireSession();
       throw refreshError;
     }
   }

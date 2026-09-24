@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
+import { InstallButton } from "@/components/pwa/InstallButton";
 import { Button } from "@/components/ui/Button";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
 
@@ -482,7 +483,7 @@ export default function SignUpPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(12,115,85,0.09),_transparent_30%),_linear-gradient(180deg,#ffffff_0%,#f6f7f3_100%)] px-4 py-4 sm:px-6 lg:px-8">
+    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(12,115,85,0.12),_transparent_30%),_linear-gradient(180deg,#ffffff_0%,#f3f7f4_100%)] px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
       <div className="mx-auto w-full max-w-6xl">
         <div className="mb-4 flex items-center justify-between gap-4">
           <Link href="/login" className="ml-auto text-sm font-medium text-black/65 hover:text-safecrib-black">
@@ -490,8 +491,8 @@ export default function SignUpPage() {
           </Link>
         </div>
 
-        <div className="mx-auto max-w-xl overflow-hidden rounded-[18px] border border-black/10 bg-white shadow-[0_26px_70px_rgba(11,12,14,0.08)]">
-          <section className="flex items-center justify-center px-5 py-5 sm:px-8 lg:px-12">
+        <div className="mx-auto max-w-xl overflow-hidden rounded-[22px] border border-black/10 bg-white shadow-[0_26px_70px_rgba(11,12,14,0.08)]">
+          <section className="flex items-center justify-center px-5 py-5 sm:px-8 sm:py-7 lg:px-12">
             <div className="w-full max-w-xl">
               <div className="mb-6 flex justify-center">
                 <SafeCribLogo height={32} href={false} />
@@ -514,6 +515,16 @@ export default function SignUpPage() {
               <form onSubmit={handleSubmit} className="w-full">
                 {renderContent()}
               </form>
+
+              {!isSuccess && <div className="mt-7 rounded-[12px] border border-safecrib-green/15 bg-[#f3faf6] p-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-safecrib-black">Make SafeCrib feel at home</p>
+                    <p className="mt-1 text-xs leading-5 text-black/55">Install the app for quick access.</p>
+                  </div>
+                  <InstallButton />
+                </div>
+              </div>}
             </div>
           </section>
         </div>

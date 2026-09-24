@@ -12,6 +12,7 @@ const config: Config = {
       fontFamily: {
         display: ["var(--font-manrope)", "Manrope", "Arial", "sans-serif"],
         sans: ["var(--font-dm-sans)", "DM Sans", "Arial", "sans-serif"],
+        script: ["var(--font-caveat)", "cursive"],
       },
       maxWidth: {
         content: "72rem",

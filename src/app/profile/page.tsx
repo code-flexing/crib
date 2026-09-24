@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { type DragEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { Button } from "@/components/ui/Button";
-import { ApiError, apiFetch, cachedApiFetch, cachedCurrentUser, cancelPendingUpload, clearClientCache, clearPendingUploads, displayName, getCachedCurrentUser, getPendingUpload, getPendingUploads, normalizeAccountStatus, normalizePageStatus, unwrapData, uploadDocument, type AccountStatus, type PageStatus, type PendingUpload } from "@/lib/api";
-//y
+import { ApiError, apiFetch, cachedApiFetch, cachedCurrentUser, cancelPendingUpload, clearClientCache, clearPendingUploads, clearSession, displayName, getCachedCurrentUser, getPendingUpload, getPendingUploads, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, unwrapData, uploadDocument, type AccountStatus, type PageStatus, type PendingUpload } from "@/lib/api";
+
 type StudentProfile = {
   displayName?: string;
   proofOfStudentship?: string;
@@ -14,7 +14,6 @@ type StudentProfile = {
   courseOfStudy?: string;
   level?: string;
   profilePicture?: string;
-  coverPhoto?: string;
   dateOfBirth?: string;
   gender?: string;
   phoneNumber?: string;
@@ -29,6 +28,52 @@ type User = { email?: string; role?: string; displayName?: unknown; studentProfi
 type ProviderPage = { status?: string } | null;
 type FormState = Omit<StudentProfile, "status" | "rejectionReason" | "reason" | "socialLinks"> & { linkedin: string; website: string };
 
+type UploadFieldProps = {
+  title: string;
+  description: string;
+  format: string;
+  accept: string;
+  value?: string;
+  uploading: boolean;
+  required?: boolean;
+  onUpload: (file: File) => void;
+};
+
+function UploadField({ title, description, format, accept, value, uploading, required = false, onUpload }: UploadFieldProps) {
+  const [dragging, setDragging] = useState(false);
+
+  const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    const file = event.dataTransfer.files[0];
+    if (file) onUpload(file);
+  };
+
+  return (
+    <div className="min-w-0 rounded-[12px] border border-black/10 bg-[#FAFBF9] p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg ${value ? "bg-[#EAF7F1] text-safecrib-green" : "bg-black/[0.05] text-black/55"}`} aria-hidden="true">{value ? "✓" : "↑"}</span>
+        <div className="min-w-0">
+          <p className="break-words text-sm font-semibold text-safecrib-black">{title}{required ? " *" : ""}</p>
+          <p className="mt-1 text-xs leading-5 text-black/55">{value ? "Uploaded and ready to use." : description}</p>
+        </div>
+      </div>
+      <label
+        className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[10px] border border-dashed px-5 py-7 text-center transition-colors ${dragging ? "border-safecrib-green bg-[#EAF7F1]" : "border-black/20 bg-white hover:border-safecrib-green hover:bg-[#F3FAF6]"} ${uploading ? "pointer-events-none opacity-60" : ""}`}
+        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+      >
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#EAF7F1] text-xl text-safecrib-green" aria-hidden="true">↑</span>
+        <span className="mt-3 max-w-full break-words text-sm font-medium text-safecrib-black">{uploading ? "Uploading..." : value ? "Choose a different file" : "Drop your file here or browse"}</span>
+        <span className="mt-1 max-w-full break-words text-xs leading-5 text-black/50">{format}</span>
+        <input required={required && !value} type="file" accept={accept} disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) onUpload(file); }} className="sr-only" />
+      </label>
+      {value && <p className="mt-3 flex items-center gap-2 text-xs font-medium text-safecrib-green"><span aria-hidden="true">✓</span> File uploaded successfully</p>}
+    </div>
+  );
+}
+
 const emptyForm: FormState = {
   displayName: "",
   proofOfStudentship: "",
@@ -36,7 +81,6 @@ const emptyForm: FormState = {
   courseOfStudy: "",
   level: "",
   profilePicture: "",
-  coverPhoto: "",
   dateOfBirth: "",
   gender: "",
   phoneNumber: "",
@@ -66,7 +110,6 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [uploadingStudentship, setUploadingStudentship] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
   const [step, setStep] = useState(0);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [cancellingUpload, setCancellingUpload] = useState<string | null>(null);
@@ -98,7 +141,14 @@ export default function ProfilePage() {
         linkedin: studentProfile?.socialLinks?.linkedin ?? "",
         website: studentProfile?.socialLinks?.website ?? "",
       });
-    }).catch(() => setMessage("We could not load your profile. Please try again."));
+    }).catch((error: unknown) => {
+      if (isUnauthorizedError(error)) {
+        clearSession();
+        router.replace("/login?reason=session-expired");
+        return;
+      }
+      setMessage("We could not load your profile. Please try again.");
+    });
   }, [router]);
 
   const update = (field: keyof FormState, value: string) => setForm((current) => ({ ...current, [field]: value }));
@@ -117,14 +167,6 @@ export default function ProfilePage() {
     catch (uploadError) { if (uploadError instanceof ApiError && uploadError.status === 429) { setPendingUploads(await getPendingUploads().catch(() => [])); setStep(2); } setMessage(uploadError instanceof Error ? uploadError.message : "We could not upload the studentship document."); }
     finally { setUploadingStudentship(false); }
   };
-  const uploadCover = async (file: File) => {
-    setUploadingCover(true);
-    setMessage("");
-    try { update("coverPhoto", await uploadDocument(file, "COVER_PHOTO")); }
-    catch (uploadError) { if (uploadError instanceof ApiError && uploadError.status === 429) { setPendingUploads(await getPendingUploads().catch(() => [])); setStep(2); } setMessage(uploadError instanceof Error ? uploadError.message : "We could not upload the cover photo."); }
-    finally { setUploadingCover(false); }
-  };
-
   const cancelUpload = async (id: string) => {
     setCancellingUpload(id);
     try { await cancelPendingUpload(id); setPendingUploads((current) => current.filter((upload) => upload.id !== id)); setMessage("Pending upload cancelled. You can upload the file again."); }
@@ -134,6 +176,7 @@ export default function ProfilePage() {
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
+    if (step !== 3) return;
     const proofOfStudentship = form.proofOfStudentship || getPendingUpload("PROOF_OF_STUDENTSHIP") || "";
     const profilePicture = form.profilePicture || getPendingUpload("AVATAR") || "";
     if (!proofOfStudentship || !profilePicture) {
@@ -144,6 +187,9 @@ export default function ProfilePage() {
     setSaving(true);
     setMessage("");
     try {
+      const socialLinks = Object.fromEntries(
+        Object.entries({ linkedin: form.linkedin, website: form.website }).filter(([, value]) => value.trim()),
+      );
       await apiFetch("/api/v1/student-profiles/complete", {
         method: "POST",
         body: JSON.stringify({
@@ -153,12 +199,11 @@ export default function ProfilePage() {
           courseOfStudy: form.courseOfStudy,
           level: form.level,
           profilePicture,
-          coverPhoto: form.coverPhoto,
-          dateOfBirth: form.dateOfBirth,
-          gender: form.gender,
-          phoneNumber: form.phoneNumber,
-          emergencyContact: form.emergencyContact,
-          socialLinks: { linkedin: form.linkedin, website: form.website },
+          ...(form.dateOfBirth ? { dateOfBirth: form.dateOfBirth } : {}),
+          ...(form.gender ? { gender: form.gender } : {}),
+          ...(form.phoneNumber ? { phoneNumber: form.phoneNumber } : {}),
+          ...(form.emergencyContact ? { emergencyContact: form.emergencyContact } : {}),
+          ...(Object.keys(socialLinks).length > 0 ? { socialLinks } : {}),
         }),
       });
       clearClientCache("/api/v1/auth/me", "/api/v1/student-profiles/me", "/api/v1/student-profiles/status");
@@ -166,6 +211,11 @@ export default function ProfilePage() {
       setStatus("pending");
       setMessage("Profile submitted for admin review.");
     } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearSession();
+        router.replace("/login?reason=session-expired");
+        return;
+      }
       setMessage(error instanceof ApiError ? error.message : "We could not submit your profile. Please try again.");
     } finally {
       setSaving(false);
@@ -184,9 +234,8 @@ export default function ProfilePage() {
       <input required={required} type={type} value={form[field]} onChange={(event) => update(field, event.target.value)} className="mt-2 w-full rounded-[8px] border border-black/15 px-4 py-3 font-normal text-safecrib-black focus:border-safecrib-green focus:outline-none" />
     </label>
   );
-  const avatarInput = <label className="block min-w-0 text-sm font-medium text-safecrib-black sm:col-span-2"><span>Profile image *</span><input required={!form.profilePicture} type="file" accept="image/*" disabled={uploadingAvatar} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAvatar(file); }} className="mt-2 block max-w-full text-xs font-normal text-black/65 sm:text-sm" />{form.profilePicture && <span className="mt-2 block text-xs font-normal text-safecrib-green">Profile image uploaded.</span>}</label>;
-  const coverInput = <label className="block min-w-0 text-sm font-medium text-safecrib-black sm:col-span-2"><span>Cover photo</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingCover} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCover(file); }} className="mt-2 block max-w-full text-xs font-normal text-black/65 sm:text-sm" />{form.coverPhoto && <span className="mt-2 block text-xs font-normal text-safecrib-green">Cover photo uploaded.</span>}</label>;
-  const studentshipDocument = <label className="block min-w-0 text-sm font-medium text-safecrib-black sm:col-span-2"><span>Proof of studentship document *</span><input required={!form.proofOfStudentship} type="file" accept="application/pdf,image/*" disabled={uploadingStudentship} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadStudentship(file); }} className="mt-2 block max-w-full text-xs font-normal text-black/65 sm:text-sm" />{form.proofOfStudentship && <span className="mt-2 block text-xs font-normal text-safecrib-green">Document uploaded.</span>}</label>;
+  const avatarInput = <UploadField title="Profile image" description="Use a clear image so other users can recognize you." format="JPG, PNG, WebP, or GIF · max 10 MB" accept="image/*" value={form.profilePicture} uploading={uploadingAvatar} required onUpload={(file) => void uploadAvatar(file)} />;
+  const studentshipDocument = <div className="sm:col-span-2"><UploadField title="Proof of studentship document" description="Upload a document that confirms your current student status." format="PDF or image · max 10 MB" accept="application/pdf,image/*" value={form.proofOfStudentship} uploading={uploadingStudentship} required onUpload={(file) => void uploadStudentship(file)} /></div>;
   const nextStep = () => setStep((current) => Math.min(current + 1, 3));
   const previousStep = () => setStep((current) => Math.max(current - 1, 0));
   const validate = () => {
@@ -198,25 +247,38 @@ export default function ProfilePage() {
     return true;
   };
 
+  const steps = ["Details", "Verification", "Contact"];
+
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
+    <main className="min-h-screen bg-[#f7f8f5] pb-24 md:pb-8">
       <DashboardNav onCreatePage={openPage} onSignOut={signOut} pageStatus={pageStatus} />
-      <section className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-8 sm:py-8">
-        <Link href="/dashboard" className="text-sm font-medium text-safecrib-green hover:underline">Back to home</Link>
-        <h1 className="mt-5 text-2xl font-medium text-safecrib-black sm:mt-6 sm:text-3xl">Your profile</h1>
-        <div className="mt-4 break-words rounded-[4px] border border-black/10 bg-white p-4 text-sm text-black/65 sm:p-5">
-          <p>Email: {user?.email ?? "Loading..."}</p>
-          <p className="mt-1">Role: {user?.role ?? "Loading..."}</p>
-          <p className="mt-1">Account review: <span className="font-medium uppercase">{status}</span></p>
-          {rejectionReason && <p className="mt-2 text-red-700">Reason: {rejectionReason}</p>}
+      <section className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-10">
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-medium text-safecrib-green transition-colors hover:text-[#0a5f47] hover:underline"><span aria-hidden="true">←</span> Back to home</Link>
+        <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-safecrib-green">Account settings</p>
+            <h1 className="mt-3 font-display text-3xl italic text-safecrib-black sm:text-4xl">Your profile</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-black/60">Keep your details current so the SafeCrib community knows who they are connecting with.</p>
+          </div>
+          <aside className="rounded-[14px] border border-black/10 bg-white p-5 shadow-[0_12px_30px_rgba(11,12,14,0.04)] sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/45">Account review</p>
+              <span className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] ${status === "rejected" ? "bg-red-50 text-red-700" : status === "pending" ? "bg-amber-50 text-amber-800" : "bg-[#eaf7f1] text-safecrib-green"}`}>{status.replace("_", " ")}</span>
+            </div>
+            <div className="mt-4 space-y-2 break-words border-t border-black/10 pt-4 text-sm text-black/60">
+              <p><span className="text-black/40">Email</span><br />{user?.email ?? "Loading..."}</p>
+              <p>Student</p>
+            </div>
+            {rejectionReason && <p className="mt-4 border-t border-red-100 pt-4 text-sm leading-5 text-red-700">{rejectionReason}</p>}
+          </aside>
         </div>
-        {step === 0 ? <div className="mt-6 rounded-[12px] border border-black/10 bg-white p-5 shadow-[0_18px_40px_rgba(11,12,14,0.05)] sm:mt-8 sm:p-6"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Profile update</p><h2 className="mt-3 text-xl font-medium text-safecrib-black sm:text-2xl">Keep your details current</h2><p className="mt-3 text-sm leading-6 text-black/60">Move through four short steps to update your account and send the changes for review.</p><Button type="button" className="mt-6 w-full sm:w-auto" onClick={nextStep}>Start profile update</Button></div> : <form onSubmit={save} className="mt-6 grid min-w-0 gap-5 rounded-[12px] border border-black/10 bg-white p-4 shadow-[0_18px_40px_rgba(11,12,14,0.05)] sm:mt-8 sm:p-6 sm:grid-cols-2">
-          <div className="sm:col-span-2"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Step {step} of 3</p><div className="mt-3 h-2 overflow-hidden rounded-full bg-black/5"><div className="h-full rounded-full bg-safecrib-green transition-all" style={{ width: `${(step / 3) * 100}%` }} /></div></div>
+        {step === 0 ? <div className="mt-8 overflow-hidden rounded-[16px] border border-black/10 bg-white shadow-[0_20px_45px_rgba(11,12,14,0.06)]"><div className="border-b border-black/10 bg-[#eaf7f1] px-5 py-4 sm:px-7"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Profile update</p></div><div className="p-5 sm:p-7"><h2 className="text-2xl font-medium text-safecrib-black sm:text-3xl">A better profile starts here.</h2><p className="mt-3 max-w-xl text-sm leading-6 text-black/60">Move through three short steps to update your details, verify your student status, and share your contact information.</p><div className="mt-7 grid gap-3 border-t border-black/10 pt-5 sm:grid-cols-3">{steps.map((label, index) => <div key={label} className="flex items-center gap-3 text-sm"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eaf7f1] text-xs font-semibold text-safecrib-green">0{index + 1}</span><span className="text-black/65">{label}</span></div>)}</div><Button type="button" className="mt-7 w-full sm:w-auto" onClick={nextStep}>Start profile update <span aria-hidden="true">→</span></Button></div></div> : <form onSubmit={save} className="mt-8 grid min-w-0 gap-6 rounded-[16px] border border-black/10 bg-white p-5 shadow-[0_20px_45px_rgba(11,12,14,0.06)] sm:p-7 sm:grid-cols-2">
+          <div className="sm:col-span-2"><div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Step {step} of 3</p><p className="mt-2 text-lg font-medium text-safecrib-black">{steps[step - 1]}</p></div><span className="text-sm font-medium text-black/40">{Math.round((step / 3) * 100)}%</span></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-black/5"><div className="h-full rounded-full bg-safecrib-green transition-all duration-300" style={{ width: `${(step / 3) * 100}%` }} /></div><div className="mt-3 grid grid-cols-3 gap-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-black/35">{steps.map((label, index) => <span key={label} className={index < step ? "text-safecrib-green" : ""}>{label}</span>)}</div></div>
           {step === 1 && <>{input("displayName", "Display name", true)}{input("schoolOfStudy", "School of study", true)}{input("courseOfStudy", "Course of study", true)}{input("level", "Level", true)}</>}
-          {step === 2 && <>{studentshipDocument}{avatarInput}{coverInput}{pendingUploads.length > 0 && <div className="sm:col-span-2 rounded-[8px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-medium">Pending uploads</p><p className="mt-1">Cancel an unfinished upload before trying again.</p><div className="mt-3 space-y-2">{pendingUploads.map((upload) => <div key={upload.id} className="flex flex-col items-start gap-2 rounded-[6px] border border-amber-900/10 p-2 sm:flex-row sm:items-center sm:justify-between"><span className="break-all">{upload.purpose ?? "Upload"}</span><Button type="button" variant="secondary" className="px-3 py-2 text-xs" loading={cancellingUpload === upload.id} onClick={() => void cancelUpload(upload.id)}>Cancel</Button></div>)}</div></div>}</>}
+          {step === 2 && <>{studentshipDocument}{avatarInput}{pendingUploads.length > 0 && <div className="sm:col-span-2 rounded-[8px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-medium">Pending uploads</p><p className="mt-1">Cancel an unfinished upload before trying again.</p><div className="mt-3 space-y-2">{pendingUploads.map((upload) => <div key={upload.id} className="flex flex-col items-start gap-2 rounded-[6px] border border-amber-900/10 p-2 sm:flex-row sm:items-center sm:justify-between"><span className="break-all">{upload.purpose ?? "Upload"}</span><Button type="button" variant="secondary" className="px-3 py-2 text-xs" loading={cancellingUpload === upload.id} onClick={() => void cancelUpload(upload.id)}>Cancel</Button></div>)}</div></div>}</>}
           {step === 3 && <>{input("dateOfBirth", "Date of birth", false, "date")}{input("gender", "Gender")}{input("phoneNumber", "Phone number")}{input("emergencyContact", "Emergency contact")}{input("linkedin", "LinkedIn link")}{input("website", "Website link")}</>}
           {message && <p className="sm:col-span-2 text-sm text-safecrib-green" role="status">{message}</p>}
-          <div className="sm:col-span-2 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={previousStep}>Back</Button>{step < 3 ? <Button type="button" className="w-full sm:w-auto" onClick={() => { if (step === 1 && !validate()) return; nextStep(); }}>Next</Button> : <Button type="submit" className="w-full sm:w-auto" loading={saving || uploadingStudentship || uploadingAvatar || uploadingCover} disabled={status === "pending"}>Update and submit for review</Button>}</div>
+          <div className="sm:col-span-2 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={previousStep}>Back</Button>{step < 3 ? <Button type="button" className="w-full sm:w-auto" onClick={() => { if (step === 1 && !validate()) return; nextStep(); }}>Next</Button> : <Button type="submit" className="w-full sm:w-auto" loading={saving || uploadingStudentship || uploadingAvatar} disabled={status === "pending"}>Update and submit for review</Button>}</div>
         </form>}
       </section>
     </main>

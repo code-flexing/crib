@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type MouseEvent, type ReactNode } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { NotificationForm } from "@/components/notifications/NotificationForm";
+import { InstallButton } from "@/components/pwa/InstallButton";
 
 const problems = [
   { title: "Fake listings", text: "Not every property is what it appears to be online." },
@@ -280,7 +281,7 @@ export default function Home() {
               Student accommodation, built on trust
             </p>
 
-            <h1 className="mt-3 max-w-md font-display text-[2.2rem] leading-[0.96] text-safecrib-black sm:text-[2.9rem] lg:text-[4rem]">
+            <h1 className="mt-3 max-w-md font-script text-[2.7rem] leading-[0.9] text-safecrib-black sm:text-[3.5rem] lg:text-[4.8rem]">
               Find a place to live. Know who you&apos;re dealing with.
             </h1>
 
@@ -288,7 +289,7 @@ export default function Home() {
               SafeCrib helps students discover verified accommodation and gives trusted landlords and agents a clearer way to publish homes with confidence.
             </p>
 
-            <div className="mt-6 flex flex-col gap-3 sm:max-w-md sm:flex-row">
+            <div className="mt-6 flex flex-col gap-3 sm:max-w-2xl sm:flex-row sm:flex-wrap">
               <RouteLink
                 href={accountHref}
                 className="inline-flex items-center justify-center gap-2 rounded-[4px] bg-safecrib-green px-5 py-3 text-sm font-medium text-safecrib-white transition-colors hover:bg-[#0a5f47]"
@@ -301,6 +302,7 @@ export default function Home() {
               >
                 How SafeCrib Works
               </a>
+              <InstallButton />
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2 text-[0.68rem] text-black/60">

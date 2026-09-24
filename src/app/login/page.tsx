@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
+import { InstallButton } from "@/components/pwa/InstallButton";
 import { Button } from "@/components/ui/Button";
 import { ApiError, getCurrentUser } from "@/lib/api";
 
@@ -139,8 +140,8 @@ export default function LoginPage() {
   const title = step === 0 ? "Welcome back" : step === 1 ? "What is your email?" : "Enter your password";
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(12,115,85,0.08),_transparent_28%),_linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] px-4 py-10">
-      <div className="w-full max-w-md rounded-[18px] border border-black/10 bg-white p-8 shadow-[0_24px_60px_rgba(11,12,14,0.08)]">
+    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(12,115,85,0.12),_transparent_30%),_linear-gradient(180deg,#ffffff_0%,#f3f7f4_100%)] px-4 py-6 sm:py-10">
+      <div className="w-full max-w-md rounded-[22px] border border-black/10 bg-white p-5 shadow-[0_24px_60px_rgba(11,12,14,0.08)] sm:p-8">
         <div className="flex justify-center">
           <SafeCribLogo height={32} href={false} />
         </div>
@@ -216,7 +217,17 @@ export default function LoginPage() {
           </div>
         </form>
 
-        <div className="mt-6 text-center text-sm text-black/60">
+        <div className="mt-6 rounded-[12px] border border-safecrib-green/15 bg-[#f3faf6] p-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-safecrib-black">Use SafeCrib like an app</p>
+              <p className="mt-1 text-xs leading-5 text-black/55">Install it for faster access.</p>
+            </div>
+            <InstallButton />
+          </div>
+        </div>
+
+        <div className="mt-5 text-center text-sm text-black/60">
           Need an account? <Link href="/signup" className="font-medium text-safecrib-green">Create one</Link>
         </div>
       </div>

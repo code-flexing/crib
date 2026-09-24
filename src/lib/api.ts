@@ -217,9 +217,15 @@ async function requestApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const message = typeof payload === "object" && payload !== null && "message" in payload && typeof payload.message === "string"
-      ? payload.message
-      : `Request failed (${response.status})`;
+    const payloadRecord = typeof payload === "object" && payload !== null ? payload as Record<string, unknown> : null;
+    const responseMessage = payloadRecord?.message;
+    const message = Array.isArray(responseMessage)
+      ? responseMessage.filter((item): item is string => typeof item === "string").join(" ")
+      : typeof responseMessage === "string"
+        ? responseMessage
+        : typeof payloadRecord?.error === "string"
+          ? payloadRecord.error
+          : `Request failed (${response.status})`;
     throw new ApiError(response.status, message);
   }
   return payload as T;

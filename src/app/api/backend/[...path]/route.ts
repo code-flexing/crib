@@ -12,6 +12,7 @@ async function forward(request: Request, path: string[]) {
     method: request.method,
     headers,
     body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+    duplex: "half",
   });
 
   const responseBody = response.status === 204 ? null : await response.text();

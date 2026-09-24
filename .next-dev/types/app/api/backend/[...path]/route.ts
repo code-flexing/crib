@@ -1,4 +1,4 @@
-// File: /home/code-flex/Desktop/crib/src/app/api/backend/[...path]/route.ts
+// File: /workspaces/crib/src/app/api/backend/[...path]/route.ts
 import * as entry from '../../../../../../src/app/api/backend/[...path]/route.js'
 import type { NextRequest } from 'next/server.js'
 

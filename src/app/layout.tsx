@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Caveat, DM_Sans, Manrope } from "next/font/google";
+import { Suspense } from "react";
 import { NetworkMonitor } from "@/components/network/NetworkMonitor";
 import { InitialPageLoader } from "@/components/loading/InitialPageLoader";
 import { PWAProvider } from "@/components/pwa/PWAProvider";
@@ -50,7 +51,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${manrope.variable} ${dmSans.variable} ${caveat.variable}`}>
       <body className={`${dmSans.className} bg-safecrib-white font-sans text-safecrib-black antialiased`}>
-        <InitialPageLoader />
+        <Suspense fallback={null}>
+          <InitialPageLoader />
+        </Suspense>
         <PWAProvider>
           <Analytics />
           <NetworkMonitor />

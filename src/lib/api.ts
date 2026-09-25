@@ -342,10 +342,26 @@ export async function resolveAdminMediaUrl(reference: unknown): Promise<string |
 }
 
 export function normalizeAccountStatus(value: unknown): AccountStatus {
-  const status = typeof value === "string" ? value.toLowerCase() : "not_submitted";
-  if (status === "approved") return "approved";
-  if (status === "pending") return "pending";
-  if (status === "rejected") return "rejected";
+  const resolveStatus = (candidate: unknown): string | null => {
+    if (typeof candidate === "string") return candidate.trim();
+    if (typeof candidate === "object" && candidate !== null) {
+      const record = candidate as Record<string, unknown>;
+      const direct = [record.status, record.state, record.profileStatus, record.value].find((entry) => typeof entry === "string");
+      if (typeof direct === "string") return direct.trim();
+      const profile = record.profile;
+      if (typeof profile === "object" && profile !== null) {
+        const nested = [((profile as Record<string, unknown>).status), ((profile as Record<string, unknown>).state), ((profile as Record<string, unknown>).profileStatus), ((profile as Record<string, unknown>).value)].find((entry) => typeof entry === "string");
+        if (typeof nested === "string") return nested.trim();
+      }
+    }
+    return null;
+  };
+
+  const rawStatus = resolveStatus(value);
+  const status = rawStatus ? rawStatus.toLowerCase().replace(/[_\s-]+/g, "_") : "not_submitted";
+  if (["approved", "verified", "active", "accepted"].includes(status)) return "approved";
+  if (["pending", "submitted", "review_pending", "under_review", "in_review", "awaiting_review", "waiting_for_review", "submitted_for_review"].includes(status)) return "pending";
+  if (["rejected", "declined", "denied", "not_approved", "failed_review"].includes(status)) return "rejected";
   return "not_submitted";
 }
 

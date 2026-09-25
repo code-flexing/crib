@@ -34,7 +34,7 @@ export default function ProfilePage() {
 
     try {
       const currentUser = getCachedCurrentUser<User>();
-      const profileStatus = currentUser?.studentProfileStatus;
+      const profileStatus = currentUser?.studentProfileStatus ?? (currentUser && typeof currentUser === "object" && "profile" in currentUser && currentUser.profile && typeof currentUser.profile === "object" && "status" in currentUser.profile ? currentUser.profile.status : null);
       setStatus(normalizeAccountStatus(profileStatus));
       setUser(currentUser ?? null);
       setRejectionReason("");
@@ -89,22 +89,24 @@ export default function ProfilePage() {
           </aside>
         </div>
 
-        <div className="mt-8 overflow-hidden rounded-[16px] border border-black/10 bg-white shadow-[0_20px_45px_rgba(11,12,14,0.06)]">
-          <div className="border-b border-black/10 bg-[#eaf7f1] px-5 py-4 sm:px-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Profile update</p>
-          </div>
+        {status !== "pending" && (
+          <div className="mt-8 overflow-hidden rounded-[16px] border border-black/10 bg-white shadow-[0_20px_45px_rgba(11,12,14,0.06)]">
+            <div className="border-b border-black/10 bg-[#eaf7f1] px-5 py-4 sm:px-7">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Profile update</p>
+            </div>
 
-          <div className="p-5 sm:p-7">
-            <h2 className="text-2xl font-medium text-safecrib-black sm:text-3xl">A better profile starts here.</h2>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-black/60">
-              Complete your student profile and submit it for review so your account is verified properly.
-            </p>
+            <div className="p-5 sm:p-7">
+              <h2 className="text-2xl font-medium text-safecrib-black sm:text-3xl">A better profile starts here.</h2>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-black/60">
+                Complete your student profile and submit it for review so your account is verified properly.
+              </p>
 
-            <Button type="button" className="mt-7 w-full sm:w-auto" onClick={() => router.push("/profile/complete")}>
-              Start profile update <span aria-hidden="true">→</span>
-            </Button>
+              <Button type="button" className="mt-7 w-full sm:w-auto" onClick={() => router.push("/profile/complete")}>
+                Start profile update <span aria-hidden="true">→</span>
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </section>
     </main>
   );

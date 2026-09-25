@@ -168,10 +168,19 @@ export default function CompleteStudentProfilePage() {
     ]).then(([user, studentProfile, statusResponse, page]) => {
       const currentDraftKey = profileDraftKey(user);
       const draft = readDraft<ProfileDraft>(currentDraftKey);
-      const rawStatus = typeof user.studentProfileStatus === "object" && user.studentProfileStatus !== null && "status" in user.studentProfileStatus
-        ? user.studentProfileStatus.status
-        : statusResponse && typeof statusResponse === "object" && "status" in statusResponse ? statusResponse.status : statusResponse;
-      setStatus(normalizeAccountStatus(rawStatus));
+      const userStatus = typeof user.studentProfileStatus === "object" && user.studentProfileStatus !== null
+        ? (("status" in user.studentProfileStatus ? user.studentProfileStatus.status : "state" in user.studentProfileStatus ? user.studentProfileStatus.state : "profileStatus" in user.studentProfileStatus ? user.studentProfileStatus.profileStatus : "value" in user.studentProfileStatus ? user.studentProfileStatus.value : null) ?? ("profile" in user.studentProfileStatus && typeof user.studentProfileStatus.profile === "object" && user.studentProfileStatus.profile !== null && "status" in user.studentProfileStatus.profile ? user.studentProfileStatus.profile.status : null))
+        : null;
+      const studentProfileStatus = typeof studentProfile === "object" && studentProfile !== null && "status" in studentProfile ? studentProfile.status : null;
+      const responseStatus = statusResponse && typeof statusResponse === "object" && statusResponse !== null
+        ? (("status" in statusResponse ? statusResponse.status : "state" in statusResponse ? statusResponse.state : "profileStatus" in statusResponse ? statusResponse.profileStatus : "value" in statusResponse ? statusResponse.value : null) ?? ("profile" in statusResponse && typeof statusResponse.profile === "object" && statusResponse.profile !== null && "status" in statusResponse.profile ? statusResponse.profile.status : null))
+        : null;
+      const normalizedStatus = normalizeAccountStatus(studentProfileStatus ?? userStatus ?? responseStatus ?? statusResponse ?? "not_submitted");
+      setStatus(normalizedStatus);
+      if (normalizedStatus === "pending") {
+        router.replace("/profile");
+        return;
+      }
       setPageStatus(normalizePageStatus(page?.status));
       setDraftKey(currentDraftKey);
       setDraftRestored(Boolean(draft));

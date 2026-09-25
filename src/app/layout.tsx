@@ -1,25 +1,66 @@
-import type { Config } from "tailwindcss";
+import type { Metadata, Viewport } from "next";
+import { Caveat, DM_Sans, Manrope } from "next/font/google";
+import { Suspense } from "react";
+import { NetworkMonitor } from "@/components/network/NetworkMonitor";
+import { InitialPageLoader } from "@/components/loading/InitialPageLoader";
+import { PWAProvider } from "@/components/pwa/PWAProvider";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
-const config: Config = {
-  content: ["./src/**/*.{ts,tsx}"],
-  theme: {
-    extend: {
-      colors: {
-        "safecrib-black": "#0B0C0E",
-        "safecrib-green": "#0C7355",
-        "safecrib-white": "#FFFFFF",
-      },
-      fontFamily: {
-        display: ["var(--font-manrope)", "Manrope", "Arial", "sans-serif"],
-        sans: ["var(--font-dm-sans)", "DM Sans", "Arial", "sans-serif"],
-        script: ["var(--font-caveat)", "cursive"],
-      },
-      maxWidth: {
-        content: "72rem",
-      },
-    },
+const manrope = Manrope({
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-dm-sans",
+  display: "swap",
+});
+
+const caveat = Caveat({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-caveat",
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  title: "SafeCrib",
+  description:
+    "SafeCrib is a student accommodation trust and verification platform, currently under development.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/icon-192.png",
   },
-  plugins: [],
 };
 
-export default config;
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#FFFFFF",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={`${manrope.variable} ${dmSans.variable} ${caveat.variable}`}>
+      <body className={`${dmSans.className} bg-safecrib-white font-sans text-safecrib-black antialiased`}>
+        <Suspense fallback={null}>
+          <InitialPageLoader />
+        </Suspense>
+        <PWAProvider>
+          <Analytics />
+          <NetworkMonitor />
+          {children}
+          <InstallPrompt />
+        </PWAProvider>
+      </body>
+    </html>
+  );
+}

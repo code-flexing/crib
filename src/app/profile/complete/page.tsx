@@ -314,7 +314,17 @@ export default function CompleteStudentProfilePage() {
     setError("");
     setStep((current) => Math.min(current + 1, 4));
   };
+  const handleNextClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    nextStep();
+  };
   const previousStep = () => setStep((current) => Math.max(current - 1, 0));
+  const handleBackClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    previousStep();
+  };
   const validate = () => {
     const validationError = validateStep(step, form);
     if (validationError) {
@@ -351,9 +361,9 @@ export default function CompleteStudentProfilePage() {
           {step === 4 && <>{input("linkedin", "LinkedIn link")}{input("website", "Website link")}</>}
           {error && <p className="sm:col-span-2 text-sm text-red-600" role="alert">{error}</p>}
           <div className="sm:col-span-2 flex items-center justify-between gap-3">
-            <Button type="button" variant="secondary" onClick={previousStep}>Back</Button>
+            <Button type="button" variant="secondary" onClick={handleBackClick}>Back</Button>
             {step < 4 ? (
-              <Button type="button" onClick={() => { if (step === 1 && !validate()) return; nextStep(); }}>Next</Button>
+              <Button type="button" onClick={handleNextClick}>Next</Button>
             ) : (
               <Button type="submit" loading={saving} disabled={status === "pending" || uploadingStudentship || uploadingAvatar || uploadingCover}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button>
             )}

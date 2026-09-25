@@ -100,6 +100,39 @@ const emptyForm: FormState = {
   website: "",
 };
 
+function hasRequiredStudentDetails(form: FormState) {
+  const displayName = String(form.displayName ?? "").trim();
+  const schoolOfStudy = String(form.schoolOfStudy ?? "").trim();
+  const courseOfStudy = String(form.courseOfStudy ?? "").trim();
+  const level = String(form.level ?? "").trim();
+
+  return Boolean(displayName && schoolOfStudy && courseOfStudy && level);
+}
+
+function hasRequiredUploads(form: FormState) {
+  const proofOfStudentship = form.proofOfStudentship || getPendingUpload("PROOF_OF_STUDENTSHIP") || "";
+  const profilePicture = form.profilePicture || getPendingUpload("AVATAR") || "";
+  return Boolean(proofOfStudentship && profilePicture);
+}
+
+function validateStep(stepNumber: number, formState: FormState) {
+  if (stepNumber === 1 && !hasRequiredStudentDetails(formState)) {
+    return "Complete the required student details before continuing.";
+  }
+
+  if (stepNumber === 2 && !hasRequiredUploads(formState)) {
+    return "Upload your proof of studentship and profile image before continuing.";
+  }
+
+  const phoneNumber = String(formState.phoneNumber ?? "").trim();
+  const emergencyContact = String(formState.emergencyContact ?? "").trim();
+  if (stepNumber === 3 && (!phoneNumber || !emergencyContact)) {
+    return "Add a phone number and emergency contact before continuing.";
+  }
+
+  return "";
+}
+
 function profileDraftKey(user: User) {
   const owner = user.id ?? user.email ?? "current";
   return `safecrib:draft:student-profile:v1:${owner}`;
@@ -200,7 +233,20 @@ export default function CompleteStudentProfilePage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (step !== 4) return;
+    if (step !== 4) {
+      setError("Complete the final step before submitting your profile for review.");
+      return;
+    }
+
+    const validationError = validateStep(1, form) || validateStep(2, form) || validateStep(3, form);
+    if (validationError) {
+      setError(validationError);
+      if (!hasRequiredStudentDetails(form)) setStep(1);
+      else if (!hasRequiredUploads(form)) setStep(2);
+      else setStep(3);
+      return;
+    }
+
     const proofOfStudentship = form.proofOfStudentship || getPendingUpload("PROOF_OF_STUDENTSHIP") || "";
     const profilePicture = form.profilePicture || getPendingUpload("AVATAR") || "";
     const coverPhoto = form.coverPhoto || getPendingUpload("COVER_PHOTO") || "";
@@ -260,13 +306,19 @@ export default function CompleteStudentProfilePage() {
     </label>
   );
   const nextStep = () => {
-    if (step === 1 && !validate()) return;
+    const validationError = validateStep(step, form);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError("");
     setStep((current) => Math.min(current + 1, 4));
   };
   const previousStep = () => setStep((current) => Math.max(current - 1, 0));
   const validate = () => {
-    if (step === 1 && (!form.displayName || !form.schoolOfStudy || !form.courseOfStudy || !form.level)) {
-      setError("Complete the required details before continuing.");
+    const validationError = validateStep(step, form);
+    if (validationError) {
+      setError(validationError);
       return false;
     }
     setError("");

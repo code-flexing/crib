@@ -5,12 +5,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { Button } from "@/components/ui/Button";
-import { clearSession, displayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, type AccountStatus } from "@/lib/api";
+import { clearSession, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, type AccountStatus } from "@/lib/api";
 
 type User = {
   email?: string;
   role?: string;
-  displayName?: unknown;
   studentProfileStatus?: unknown;
 };
 
@@ -34,7 +33,7 @@ export default function ProfilePage() {
 
     try {
       const currentUser = getCachedCurrentUser<User>();
-      const profileStatus = currentUser?.studentProfileStatus ?? (currentUser && typeof currentUser === "object" && "profile" in currentUser && currentUser.profile && typeof currentUser.profile === "object" && "status" in currentUser.profile ? currentUser.profile.status : null);
+      const profileStatus = currentUser?.studentProfileStatus;
       setStatus(normalizeAccountStatus(profileStatus));
       setUser(currentUser ?? null);
       setRejectionReason("");
@@ -89,7 +88,7 @@ export default function ProfilePage() {
           </aside>
         </div>
 
-        {status !== "pending" && (
+        {status !== "approved" && status !== "pending" && (
           <div className="mt-8 overflow-hidden rounded-[16px] border border-black/10 bg-white shadow-[0_20px_45px_rgba(11,12,14,0.06)]">
             <div className="border-b border-black/10 bg-[#eaf7f1] px-5 py-4 sm:px-7">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Profile update</p>

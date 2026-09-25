@@ -346,6 +346,9 @@ export default function CompleteStudentProfilePage() {
     await submit(event);
   };
 
+  const isPending = status === "pending";
+  const isRejected = status === "rejected";
+
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
       <DashboardNav onCreatePage={openPage} onSignOut={signOut} pageStatus={pageStatus} />
@@ -380,7 +383,7 @@ export default function CompleteStudentProfilePage() {
                     {step < 4 ? (
                       <Button type="button" onClick={handleNextClick}>Next</Button>
                     ) : (
-                      <Button type="submit" loading={saving} disabled={status === "pending" || uploadingStudentship || uploadingAvatar}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button>
+                      <Button type="submit" loading={saving} disabled={isPending || uploadingStudentship || uploadingAvatar}>{isRejected ? "Update and resubmit" : "Submit for review"}</Button>
                     )}
                   </div>
                 </form>
@@ -407,7 +410,7 @@ export default function CompleteStudentProfilePage() {
                   {step < 4 ? (
                     <Button type="button" onClick={handleNextClick}>Next</Button>
                   ) : (
-                    <Button type="submit" loading={saving} disabled={status === "pending" || uploadingStudentship || uploadingAvatar}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button>
+                    <Button type="submit" loading={saving} disabled={isPending || uploadingStudentship || uploadingAvatar}>{isRejected ? "Update and resubmit" : "Submit for review"}</Button>
                   )}
                 </div>
               </form>

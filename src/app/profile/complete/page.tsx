@@ -332,6 +332,9 @@ export default function CompleteStudentProfilePage() {
     await submit(event);
   };
 
+  const isPending = status === "pending";
+  const isRejected = status === "rejected";
+
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
       <DashboardNav onCreatePage={openPage} onSignOut={signOut} pageStatus={pageStatus} />
@@ -340,8 +343,8 @@ export default function CompleteStudentProfilePage() {
         <h1 className="mt-6 text-3xl font-medium text-safecrib-black">Complete your student profile</h1>
         <p className="mt-3 max-w-xl text-sm leading-6 text-black/60">Complete your student details, then submit them for admin review from the final step.</p>
         {draftRestored && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[8px] border border-safecrib-green/20 bg-[#EAF7F1] px-4 py-3 text-sm text-safecrib-green"><span>Draft restored. Your progress is saved on this device.</span><Button type="button" variant="secondary" className="border-safecrib-green/30 px-3 py-2 text-xs text-safecrib-green" onClick={discardDraft}>Discard draft</Button></div>}
-        {status === "pending" && <p className="mt-6 rounded-[4px] border border-black/10 bg-white p-4 text-sm text-black/65">Your profile is under review. You can update it after a decision.</p>}
-        {status === "rejected" && <div className="mt-6 rounded-[4px] border border-red-200 bg-red-50 p-4 text-sm text-red-700"><p>Your profile was not approved. Update the details below and resubmit.</p>{rejectionReason && <p className="mt-2">Reason: {rejectionReason}</p>}</div>}
+        {isPending && <p className="mt-6 rounded-[4px] border border-black/10 bg-white p-4 text-sm text-black/65">Your profile is under review. You can update it after a decision.</p>}
+        {isRejected && <div className="mt-6 rounded-[4px] border border-red-200 bg-red-50 p-4 text-sm text-red-700"><p>Your profile was not approved. Update the details below and resubmit.</p>{rejectionReason && <p className="mt-2">Reason: {rejectionReason}</p>}</div>}
         {step === 0 ? <div className="mt-8 rounded-[12px] border border-black/10 bg-white p-6 shadow-[0_18px_40px_rgba(11,12,14,0.05)]"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Student profile</p><h2 className="mt-3 text-2xl font-medium text-safecrib-black">Set up your profile in four steps</h2><p className="mt-3 text-sm leading-6 text-black/60">Add your details, verification document, profile image, and contact information one step at a time. Nothing is submitted until you click the final button.</p><Button type="button" className="mt-6" onClick={nextStep}>Start your profile</Button></div> : <form onSubmit={handleFormSubmit} className="mt-8 grid gap-5 rounded-[12px] border border-black/10 bg-white p-6 shadow-[0_18px_40px_rgba(11,12,14,0.05)] sm:grid-cols-2">
           <div className="min-w-0 sm:col-span-2"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Step {step} of 4</p><span className="shrink-0 text-xs text-black/45">{Math.round((step / 4) * 100)}%</span></div><div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-black/5"><div className="h-full rounded-full bg-safecrib-green transition-[width] duration-300" style={{ width: `${(step / 4) * 100}%` }} /></div></div>
           {step === 1 && <>{input("displayName", "Display name", true)}{input("schoolOfStudy", "School of study", true)}{input("courseOfStudy", "Course of study", true)}{input("level", "Level", true)}</>}
@@ -354,7 +357,7 @@ export default function CompleteStudentProfilePage() {
             {step < 4 ? (
               <Button type="button" onClick={handleNextClick}>Next</Button>
             ) : (
-              <Button type="submit" loading={saving} disabled={status === "pending" || uploadingStudentship || uploadingAvatar}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button>
+              <Button type="submit" loading={saving} disabled={isPending || uploadingStudentship || uploadingAvatar}>{isRejected ? "Update and resubmit" : "Submit for review"}</Button>
             )}
           </div>
         </form>}

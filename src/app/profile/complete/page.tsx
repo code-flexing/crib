@@ -14,7 +14,6 @@ type StudentProfile = {
   courseOfStudy?: string;
   level?: string;
   profilePicture?: string;
-  coverPhoto?: string;
   proofOfStudentship?: string;
   dateOfBirth?: string;
   gender?: string;
@@ -90,7 +89,6 @@ const emptyForm: FormState = {
   courseOfStudy: "",
   level: "",
   profilePicture: "",
-  coverPhoto: "",
   proofOfStudentship: "",
   dateOfBirth: "",
   gender: "",
@@ -217,13 +215,6 @@ export default function CompleteStudentProfilePage() {
     catch (uploadError) { if (uploadError instanceof ApiError && uploadError.status === 429) { setPendingUploads(await getPendingUploads().catch(() => [])); setStep(2); } setError(uploadError instanceof Error ? uploadError.message : "We could not upload the profile image."); }
     finally { setUploadingAvatar(false); }
   };
-  const uploadCover = async (file: File) => {
-    setUploadingCover(true); setError("");
-    try { update("coverPhoto", await uploadDocument(file, "COVER_PHOTO")); }
-    catch (uploadError) { if (uploadError instanceof ApiError && uploadError.status === 429) { setPendingUploads(await getPendingUploads().catch(() => [])); setStep(2); } setError(uploadError instanceof Error ? uploadError.message : "We could not upload the cover photo."); }
-    finally { setUploadingCover(false); }
-  };
-
   const cancelUpload = async (id: string) => {
     setCancellingUpload(id);
     try { await cancelPendingUpload(id); setPendingUploads((current) => current.filter((upload) => upload.id !== id)); setError("Pending upload cancelled. You can upload the file again."); }
@@ -249,7 +240,6 @@ export default function CompleteStudentProfilePage() {
 
     const proofOfStudentship = form.proofOfStudentship || getPendingUpload("PROOF_OF_STUDENTSHIP") || "";
     const profilePicture = form.profilePicture || getPendingUpload("AVATAR") || "";
-    const coverPhoto = form.coverPhoto || getPendingUpload("COVER_PHOTO") || "";
     if (!proofOfStudentship || !profilePicture) {
       setStep(2);
       setError("Upload your studentship document and profile image before submitting.");
@@ -267,7 +257,6 @@ export default function CompleteStudentProfilePage() {
           courseOfStudy: form.courseOfStudy,
           level: form.level,
           profilePicture,
-          ...(coverPhoto ? { coverPhoto } : {}),
           ...(form.dateOfBirth ? { dateOfBirth: form.dateOfBirth } : {}),
           ...(form.gender ? { gender: form.gender } : {}),
           ...(form.phoneNumber ? { phoneNumber: form.phoneNumber } : {}),
@@ -356,7 +345,7 @@ export default function CompleteStudentProfilePage() {
         {step === 0 ? <div className="mt-8 rounded-[12px] border border-black/10 bg-white p-6 shadow-[0_18px_40px_rgba(11,12,14,0.05)]"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Student profile</p><h2 className="mt-3 text-2xl font-medium text-safecrib-black">Set up your profile in four steps</h2><p className="mt-3 text-sm leading-6 text-black/60">Add your details, verification document, profile image, and contact information one step at a time. Nothing is submitted until you click the final button.</p><Button type="button" className="mt-6" onClick={nextStep}>Start your profile</Button></div> : <form onSubmit={handleFormSubmit} className="mt-8 grid gap-5 rounded-[12px] border border-black/10 bg-white p-6 shadow-[0_18px_40px_rgba(11,12,14,0.05)] sm:grid-cols-2">
           <div className="min-w-0 sm:col-span-2"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Step {step} of 4</p><span className="shrink-0 text-xs text-black/45">{Math.round((step / 4) * 100)}%</span></div><div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-black/5"><div className="h-full rounded-full bg-safecrib-green transition-[width] duration-300" style={{ width: `${(step / 4) * 100}%` }} /></div></div>
           {step === 1 && <>{input("displayName", "Display name", true)}{input("schoolOfStudy", "School of study", true)}{input("courseOfStudy", "Course of study", true)}{input("level", "Level", true)}</>}
-          {step === 2 && <div className="sm:col-span-2 grid min-w-0 gap-3 sm:grid-cols-2"><div className="sm:col-span-2"><p className="text-lg font-medium text-safecrib-black">Upload your verification files</p><p className="mt-1 text-sm leading-6 text-black/60">Add your verification document and profile images. Uploading saves them for the final review step; it does not submit your profile.</p></div><UploadAccordion title="Proof of studentship document" description="Required for student verification" accept="application/pdf,image/*" format="PDF or image · max 10 MB" value={form.proofOfStudentship} uploading={uploadingStudentship} required onUpload={(file) => void uploadStudentship(file)} /><UploadAccordion title="Profile image" description="Required for your student profile" accept="image/*" format="JPG, PNG, or WebP · max 10 MB" value={form.profilePicture} uploading={uploadingAvatar} required onUpload={(file) => void uploadAvatar(file)} /><UploadAccordion title="Cover photo" description="Optional image for your student profile" accept="image/*" format="JPG, PNG, or WebP · max 10 MB" value={form.coverPhoto} uploading={uploadingCover} onUpload={(file) => void uploadCover(file)} />{pendingUploads.length > 0 && <div className="sm:col-span-2 rounded-[8px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-medium">Pending uploads</p><p className="mt-1">Cancel an unfinished upload before trying again.</p><div className="mt-3 space-y-2">{pendingUploads.map((upload) => <div key={upload.id} className="flex flex-col items-start gap-2 rounded-[6px] border border-amber-900/10 p-2 sm:flex-row sm:items-center sm:justify-between"><span className="break-all">{upload.purpose ?? "Upload"}</span><Button type="button" variant="secondary" className="px-3 py-2 text-xs" loading={cancellingUpload === upload.id} onClick={() => void cancelUpload(upload.id)}>Cancel</Button></div>)}</div></div>}</div>}
+          {step === 2 && <div className="sm:col-span-2 grid min-w-0 gap-3 sm:grid-cols-2"><div className="sm:col-span-2"><p className="text-lg font-medium text-safecrib-black">Upload your verification files</p><p className="mt-1 text-sm leading-6 text-black/60">Add your verification document and profile image. Uploading saves them for the final review step; it does not submit your profile.</p></div><UploadAccordion title="Proof of studentship document" description="Required for student verification" accept="application/pdf,image/*" format="PDF or image · max 10 MB" value={form.proofOfStudentship} uploading={uploadingStudentship} required onUpload={(file) => void uploadStudentship(file)} /><UploadAccordion title="Profile image" description="Required for your student profile" accept="image/*" format="JPG, PNG, or WebP · max 10 MB" value={form.profilePicture} uploading={uploadingAvatar} required onUpload={(file) => void uploadAvatar(file)} />{pendingUploads.length > 0 && <div className="sm:col-span-2 rounded-[8px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-medium">Pending uploads</p><p className="mt-1">Cancel an unfinished upload before trying again.</p><div className="mt-3 space-y-2">{pendingUploads.map((upload) => <div key={upload.id} className="flex flex-col items-start gap-2 rounded-[6px] border border-amber-900/10 p-2 sm:flex-row sm:items-center sm:justify-between"><span className="break-all">{upload.purpose ?? "Upload"}</span><Button type="button" variant="secondary" className="px-3 py-2 text-xs" loading={cancellingUpload === upload.id} onClick={() => void cancelUpload(upload.id)}>Cancel</Button></div>)}</div></div>}</div>}
           {step === 3 && <>{input("dateOfBirth", "Date of birth", false, "date")}{input("gender", "Gender")}{input("phoneNumber", "Phone number")}{input("emergencyContact", "Emergency contact")}</>}
           {step === 4 && <>{input("linkedin", "LinkedIn link")}{input("website", "Website link")}</>}
           {error && <p className="sm:col-span-2 text-sm text-red-600" role="alert">{error}</p>}
@@ -365,7 +354,7 @@ export default function CompleteStudentProfilePage() {
             {step < 4 ? (
               <Button type="button" onClick={handleNextClick}>Next</Button>
             ) : (
-              <Button type="submit" loading={saving} disabled={status === "pending" || uploadingStudentship || uploadingAvatar || uploadingCover}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button>
+              <Button type="submit" loading={saving} disabled={status === "pending" || uploadingStudentship || uploadingAvatar}>{status === "rejected" ? "Update and resubmit" : "Submit for review"}</Button>
             )}
           </div>
         </form>}

@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 
 type EntityType = "student_profile" | "provider_page";
 type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
-type ReviewSubmission = { id: string; email: string; status: ReviewStatus; entityType: EntityType; submittedData: Record<string, unknown>; rejectionReason: string | null; submittedAt: string; createdAt: string; reviewer?: unknown; reviewedAt?: string };
+type ReviewSubmission = { id: string; entityId?: string | null; email: string; status: ReviewStatus; entityType: EntityType; submittedData: Record<string, unknown>; rejectionReason: string | null; submittedAt: string; createdAt: string; reviewer?: unknown; reviewedAt?: string };
 
 const labels: Record<string, string> = { displayName: "Display name", providerType: "Provider type", schoolOfStudy: "School of study", courseOfStudy: "Course of study", level: "Level", dateOfBirth: "Date of birth", gender: "Gender", phoneNumber: "Phone number", emergencyContact: "Emergency contact", socialLinks: "Social links", description: "Business details", phone: "Contact number", payoutAccounts: "Payout accounts" };
 const mediaFields = new Set(["profilePicture", "coverPhoto", "proofOfStudentship", "proofOfLicense"]);
@@ -54,7 +54,15 @@ export default function AdminReviewPage() {
     if (trimmedReason.length > 2000) { setError("The rejection reason must be 2,000 characters or fewer."); return; }
     setAction(status); setError("");
     try {
-      const response = unwrapData<Partial<ReviewSubmission>>(await adminFetch<unknown>("/api/v1/admin/review", { method: "POST", body: JSON.stringify({ submissionId: id, status, ...(status === "REJECTED" ? { reason: trimmedReason } : {}) }) }));
+      const reviewSubmission = (submissionId: string) => adminFetch<unknown>("/api/v1/admin/review", { method: "POST", body: JSON.stringify({ submissionId, status, ...(status === "REJECTED" ? { reason: trimmedReason } : {}) }) });
+      let result: unknown;
+      try {
+        result = await reviewSubmission(id);
+      } catch (reviewError) {
+        if (!(reviewError instanceof ApiError) || reviewError.status !== 404 || review?.entityType !== "student_profile" || !review.entityId || review.entityId === id) throw reviewError;
+        result = await reviewSubmission(review.entityId);
+      }
+      const response = unwrapData<Partial<ReviewSubmission>>(result);
       setReview((current) => current ? { ...current, ...response, status, rejectionReason: status === "REJECTED" ? trimmedReason : null } : current);
     } catch (reviewError) {
       if (reviewError instanceof ApiError && (reviewError.status === 401 || reviewError.status === 403)) { router.replace(`/admin/login?reason=${reviewError.status === 403 ? "denied" : "session-expired"}`); return; }

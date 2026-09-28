@@ -70,9 +70,9 @@ export async function getCurrentUser<T>() {
   try {
     return unwrapData<T>(await apiFetch<unknown>("/api/v1/users/me"));
   } catch (error) {
-    if (error instanceof ApiError && (error.status === 401 || error.status === 404 || error.status === 405)) {
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404 || error.status === 405)) {
       try {
-        return await apiFetch<T>("/api/v1/auth/me", { method: "POST" });
+        return unwrapData<T>(await apiFetch<unknown>("/api/v1/auth/me", { method: "POST" }));
       } catch (fallbackError) {
         if (!(fallbackError instanceof ApiError) || fallbackError.status !== 401) throw fallbackError;
         const refreshToken = typeof window === "undefined" ? null : localStorage.getItem("safecrib_refresh_token");
@@ -123,6 +123,11 @@ export function clearClientCache(...paths: string[]) {
   paths.forEach((path) => localStorage.removeItem(cacheKey(path)));
 }
 
+export function primeCurrentUserCache(user: unknown) {
+  writeClientCache("/api/v1/users/me", user);
+  writeClientCache("/api/v1/auth/me", user);
+}
+
 const pendingUploadPrefix = "safecrib_pending_upload:";
 
 function uploadFingerprint(file: File) {
@@ -164,8 +169,7 @@ export async function cachedApiFetch<T>(path: string, init: RequestInit = {}) {
 export async function cachedCurrentUser<T>() {
   const cached = getCachedCurrentUser<T>();
   const request = getCurrentUser<T>().then((value) => {
-    writeClientCache("/api/v1/users/me", value);
-    writeClientCache("/api/v1/auth/me", value);
+    primeCurrentUserCache(value);
     return value;
   });
   if (cached !== null) {
@@ -188,17 +192,50 @@ function extractTokens(value: unknown): { accessToken: string; refreshToken: str
   };
 }
 
-export function displayName(value: unknown): string {
+export function displayName(value: unknown, depth = 0): string {
+  if (depth > 6) return "";
   if (typeof value === "string" && value.trim()) return value.trim();
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const itemName = displayName(item, depth + 1);
+      if (itemName) return itemName;
+    }
+  }
   if (typeof value === "object" && value !== null) {
     const record = value as Record<string, unknown>;
-    if (typeof record.displayName === "string" && record.displayName.trim()) return record.displayName.trim();
-    const firstName = typeof record.firstName === "string" ? record.firstName.trim() : "";
-    const lastName = typeof record.lastName === "string" ? record.lastName.trim() : "";
-    if (firstName || lastName) return `${firstName} ${lastName}`.trim();
-    if (typeof record.name === "string" && record.name.trim()) return record.name.trim();
+    for (const key of ["displayName", "display_name", "fullName", "full_name", "name", "username", "user_name", "preferred_username", "nickname"]) {
+      const candidate = record[key];
+      if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+      if (typeof candidate === "object" && candidate !== null) {
+        const nestedName = displayName(candidate, depth + 1);
+        if (nestedName) return nestedName;
+      }
+    }
+    const firstName = [record.firstName, record.first_name, record.givenName, record.given_name, record.first].find((name) => typeof name === "string") as string | undefined;
+    const lastName = [record.lastName, record.last_name, record.familyName, record.family_name, record.last, record.surname].find((name) => typeof name === "string") as string | undefined;
+    if (firstName?.trim() || lastName?.trim()) return `${firstName?.trim() ?? ""} ${lastName?.trim() ?? ""}`.trim();
+    for (const [key, candidate] of Object.entries(record)) {
+      if (typeof candidate !== "object" || candidate === null || key === "photos" || key === "images") continue;
+      const nestedName = displayName(candidate, depth + 1);
+      if (nestedName) return nestedName;
+    }
   }
   return "";
+}
+
+export function getAuthenticatedDisplayName() {
+  if (typeof window === "undefined") return "";
+  try {
+    const token = localStorage.getItem("safecrib_access_token");
+    const payloadSegment = token?.split(".")[1];
+    if (!payloadSegment) return "";
+    const encoded = payloadSegment.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=");
+    const bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+    return displayName(JSON.parse(new TextDecoder().decode(bytes)) as unknown);
+  } catch {
+    return "";
+  }
 }
 
 export function unwrapData<T>(value: unknown): T {
@@ -308,15 +345,62 @@ export async function uploadDocument(file: File, purpose: UploadPurpose, entityI
   return response.url;
 }
 
+export type ListingMediaPurpose = "LISTING_PHOTO" | "LISTING_VIDEO";
+
+export async function uploadSignedMedia(file: File, purpose: UploadPurpose, entityId?: string) {
+  const signatureResponse = unwrapData<unknown>(await apiFetch<unknown>("/api/v1/media/upload-signature", {
+    method: "POST",
+    body: JSON.stringify({ purpose, contentType: file.type, sizeBytes: file.size, ...(entityId ? { entityId } : {}) }),
+  }));
+  const signature = recordValue(signatureResponse);
+  const uploadPayload = recordValue(signature.uploadPayload ?? signature.payload);
+  const uploadUrl = signature.uploadUrl ?? signature.upload_url ?? signature.url ?? uploadPayload.uploadUrl ?? uploadPayload.url;
+  const mediaId = signature.mediaId ?? signature.id ?? recordValue(signature.media).id;
+
+  if (typeof uploadUrl !== "string" || typeof mediaId !== "string") {
+    throw new Error("The media service did not return a usable signed upload.");
+  }
+
+  const body = new FormData();
+  body.append("file", file);
+  Object.entries(uploadPayload).forEach(([key, value]) => {
+    if (key !== "uploadUrl" && key !== "url" && value !== null && value !== undefined) {
+      body.append(key, String(value));
+    }
+  });
+
+  const response = await fetch(uploadUrl, { method: "POST", body });
+  if (!response.ok) throw new ApiError(response.status, "The file could not be uploaded. Please retry.");
+
+  return { mediaId, status: String(signature.status ?? recordValue(signature.media).status ?? "PENDING").toUpperCase() };
+}
+
+export async function uploadListingMedia(file: File, purpose: ListingMediaPurpose, listingId: string) {
+  return uploadSignedMedia(file, purpose, listingId);
+}
+
+export async function waitForMediaReady(mediaId: string) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const uploads = await getPendingUploads().catch(() => []);
+    const item = uploads.find((upload) => upload.id === mediaId);
+    if (String(item?.status ?? "").toUpperCase() === "READY") return;
+    const access = unwrapData<unknown>(await apiFetch<unknown>(`/api/v1/media/${encodeURIComponent(mediaId)}/access`).catch(() => null));
+    if (typeof access === "string" || (typeof access === "object" && access !== null && ["url", "accessUrl", "deliveryUrl"].some((key) => typeof (access as Record<string, unknown>)[key] === "string"))) return;
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+  }
+  throw new Error("The upload is complete, but media processing is still in progress. Refresh before retrying.");
+}
+
 export async function resolveMediaUrl(reference: unknown): Promise<string | null> {
   if (typeof reference !== "string" || !reference) return null;
   if (/^(https?:|data:|blob:)/.test(reference)) return reference;
 
   try {
     const response = await apiFetch<unknown>(`/api/v1/media/${encodeURIComponent(reference)}/access`);
-    if (typeof response === "string") return response;
-    if (typeof response === "object" && response !== null) {
-      const mediaResponse = response as Record<string, unknown>;
+    const mediaData = unwrapData<unknown>(response);
+    if (typeof mediaData === "string") return mediaData;
+    if (typeof mediaData === "object" && mediaData !== null) {
+      const mediaResponse = mediaData as Record<string, unknown>;
       for (const key of ["url", "accessUrl", "deliveryUrl"]) {
         if (typeof mediaResponse[key] === "string") return mediaResponse[key];
       }
@@ -367,8 +451,8 @@ export function normalizeAccountStatus(value: unknown): AccountStatus {
 
 export function normalizePageStatus(value: unknown): PageStatus {
   const status = typeof value === "string" ? value.toLowerCase() : "none";
-  if (status === "approved") return "approved";
-  if (status === "pending") return "pending";
+  if (["approved", "verified"].includes(status)) return "approved";
+  if (["pending", "submitted", "under_review"].includes(status)) return "pending";
   if (status === "rejected") return "rejected";
   return "none";
 }

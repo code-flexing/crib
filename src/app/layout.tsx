@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { NetworkMonitor } from "@/components/network/NetworkMonitor";
 import { InitialPageLoader } from "@/components/loading/InitialPageLoader";
 import { PWAProvider } from "@/components/pwa/PWAProvider";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
@@ -50,16 +51,18 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${manrope.variable} ${dmSans.variable} ${caveat.variable}`}>
-      <body className={`${dmSans.className} bg-safecrib-white font-sans text-safecrib-black antialiased`}>
+      <body className={`${dmSans.className} safecrib-theme-frame bg-safecrib-white font-sans text-safecrib-black antialiased`}>
         <Suspense fallback={null}>
           <InitialPageLoader />
         </Suspense>
-        <PWAProvider>
-          <Analytics />
-          <NetworkMonitor />
-          {children}
-          <InstallPrompt />
-        </PWAProvider>
+        <ThemeProvider>
+          <PWAProvider>
+            <Analytics />
+            <NetworkMonitor />
+            {children}
+            <InstallPrompt />
+          </PWAProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

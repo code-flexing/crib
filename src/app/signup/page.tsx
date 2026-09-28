@@ -6,6 +6,7 @@ import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
 import { InstallButton } from "@/components/pwa/InstallButton";
 import { Button } from "@/components/ui/Button";
+import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
 
 const API_URL = "/api/auth/register";
@@ -262,9 +263,7 @@ export default function SignUpPage() {
             <Link href="/login" className="flex-1">
               <Button className="w-full">Go to login</Button>
             </Link>
-            <Link href="/" className="flex-1">
-              <Button variant="secondary" className="w-full">Back home</Button>
-            </Link>
+            <BackHomeLink href="/" label="Back home" className="flex-1 justify-center" />
           </div>
         </div>
       );
@@ -316,9 +315,7 @@ export default function SignUpPage() {
           </div>
 
           <div className="mt-8 flex items-center justify-between gap-3">
-            <Link href="/" className="text-sm font-medium text-black/65 hover:text-safecrib-black">
-              Back home
-            </Link>
+            <BackHomeLink href="/" label="Back home" />
             <Button type="button" onClick={goNext}>Continue</Button>
           </div>
         </div>

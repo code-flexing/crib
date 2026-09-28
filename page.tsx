@@ -290,11 +290,6 @@ export default function CompleteStudentProfilePage() {
   };
 
   const openPage = () => router.push(pageStatus === "none" ? "/page/new" : "/page");
-  const signOut = () => {
-    localStorage.removeItem("safecrib_access_token");
-    localStorage.removeItem("safecrib_refresh_token");
-    router.replace("/login");
-  };
   const discardDraft = () => {
     if (draftKey) removeDraft(draftKey);
     setForm(emptyForm);
@@ -351,7 +346,7 @@ export default function CompleteStudentProfilePage() {
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
-      <DashboardNav onCreatePage={openPage} onSignOut={signOut} pageStatus={pageStatus} />
+      <DashboardNav onCreatePage={openPage} pageStatus={pageStatus} />
       <section className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8">
         <Link href="/dashboard" className="text-sm font-medium text-safecrib-green hover:underline">Back to home</Link>
         <h1 className="mt-6 text-3xl font-medium text-safecrib-black">Complete your student profile</h1>

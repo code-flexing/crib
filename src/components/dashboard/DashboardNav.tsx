@@ -1,56 +1,56 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
+import { Icon, type IconName } from "@/components/ui/Icon";
 
 type DashboardNavProps = {
   onCreatePage: () => void;
-  onSignOut: () => void;
   pageStatus: "none" | "pending" | "approved" | "rejected";
   canManagePage?: boolean;
-  displayName?: string;
-  profileImage?: string | null;
+  supportCount?: number;
 };
 
 const items = [
-  { href: "/dashboard", label: "Home", icon: "⌂" },
-  { href: "/profile", label: "Profile", icon: "◎" },
-];
+  { href: "/dashboard", label: "Home", icon: "home" },
+  { href: "/support", label: "Support", icon: "support" },
+  { href: "/profile", label: "Settings", icon: "settings" },
+] satisfies { href: string; label: string; icon: IconName }[];
 
-export function DashboardNav({ onCreatePage, onSignOut, pageStatus, canManagePage = true, displayName, profileImage }: DashboardNavProps) {
+function iconLinkClass(active: boolean) {
+  return `relative inline-flex h-11 w-11 items-center justify-center rounded-xl border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green ${active ? "border-safecrib-green/20 bg-safecrib-green/10 text-safecrib-green" : "border-transparent text-black/60 hover:border-black/10 hover:bg-black/[0.03] hover:text-safecrib-black"}`;
+}
+
+function SupportCount({ count }: { count: number }) {
+  if (count < 1) return null;
+  return <span aria-label={`${count} open support conversations`} className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-safecrib-green px-1 text-[10px] font-bold text-white">{count > 9 ? "9+" : count}</span>;
+}
+
+export function DashboardNav({ onCreatePage, pageStatus, canManagePage = true, supportCount = 0 }: DashboardNavProps) {
   const pathname = usePathname();
-  const pageLabel = pageStatus === "none" ? "Page" : "My Page";
-  const avatar = (size: string, pixels: number) => profileImage ? <Image src={profileImage} alt="" width={pixels} height={pixels} unoptimized className={`${size} rounded-full object-cover`} /> : <span className={`${size} flex items-center justify-center rounded-full border border-safecrib-green/25 bg-safecrib-green/10 text-safecrib-green`} aria-label={displayName ? `${displayName} profile image` : "Add a profile image"}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-1/2 w-1/2 fill-none stroke-current" strokeWidth="1.8"><circle cx="12" cy="8" r="3.5" /><path d="M4.8 20c.9-3.3 3.3-5 7.2-5s6.3 1.7 7.2 5" strokeLinecap="round" /></svg></span>;
+  const pageLabel = pageStatus === "none" ? "Create provider Page" : "My provider Page";
+  const pageActive = pathname.startsWith("/page");
 
   return (
     <header className="border-b border-black/10 bg-safecrib-white md:sticky md:top-0 md:z-40">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-8">
-        <Link href="/dashboard" aria-label="SafeCrib home" className="hidden md:block">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-8">
+        <Link href="/dashboard" aria-label="SafeCrib home" title="SafeCrib home" className="hidden md:block">
           <SafeCribLogo height={28} href={false} />
         </Link>
-        <nav aria-label="Dashboard navigation" className="hidden items-center gap-2 md:flex">
-          {items.map((item) => (
-            <Link key={item.href} href={item.href} className={`rounded-[4px] px-4 py-2 text-sm font-medium ${pathname === item.href ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03] hover:text-safecrib-black"}`}>
-              {item.label}
-            </Link>
-          ))}
-          {canManagePage && <button type="button" onClick={onCreatePage} className="rounded-[4px] px-4 py-2 text-sm font-medium text-black/60 hover:bg-black/[0.03] hover:text-safecrib-black">+ {pageLabel}</button>}
-          <button type="button" onClick={onSignOut} className="ml-2 rounded-[4px] border border-black/15 px-4 py-2 text-sm font-medium text-safecrib-black hover:bg-black/[0.03]">
-            Sign out
-          </button>
-          <Link href="/profile" aria-label="Open profile" className="ml-1 rounded-full">{avatar("h-9 w-9", 36)}</Link>
+        <nav aria-label="Dashboard navigation" className="ml-auto hidden items-center gap-2 md:flex">
+          {items.map((item) => <Link key={item.href} href={item.href} aria-label={item.label} title={item.label} aria-current={pathname === item.href ? "page" : undefined} className={iconLinkClass(pathname === item.href)}>
+            <Icon name={item.icon} />
+            {item.href === "/support" && <SupportCount count={supportCount} />}
+          </Link>)}
+          {canManagePage && <button type="button" onClick={onCreatePage} aria-label={pageLabel} title={pageLabel} aria-current={pageActive ? "page" : undefined} className={iconLinkClass(pageActive)}><Icon name="page" /></button>}
         </nav>
       </div>
       <nav aria-label="Mobile dashboard navigation" className="fixed inset-x-0 bottom-0 z-50 flex border-t border-black/10 bg-safecrib-white pb-[var(--safe-area-bottom)] md:hidden">
-        <Link href="/dashboard" className={`flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium ${pathname === "/dashboard" ? "text-safecrib-green" : "text-black/60"}`}>
-          <span aria-hidden="true" className="text-xl leading-none">⌂</span><span>Home</span>
-        </Link>
-        {canManagePage && <button type="button" onClick={onCreatePage} className="flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium text-black/60"><span aria-hidden="true" className="text-2xl leading-none">+</span><span>{pageLabel}</span></button>}
-        <Link href="/profile" className={`flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium ${pathname === "/profile" ? "text-safecrib-green" : "text-black/60"}`}>
-          {avatar("h-7 w-7", 28)}<span>Profile</span>
-        </Link>
+        <Link href="/dashboard" aria-label="Home" title="Home" aria-current={pathname === "/dashboard" ? "page" : undefined} className={`mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pathname === "/dashboard" ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="home" className="h-6 w-6" /></Link>
+        <Link href="/support" aria-label="Support" title="Support" aria-current={pathname.startsWith("/support") ? "page" : undefined} className={`relative mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pathname.startsWith("/support") ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="support" className="h-6 w-6" /><SupportCount count={supportCount} /></Link>
+        {canManagePage && <button type="button" onClick={onCreatePage} aria-label={pageLabel} title={pageLabel} aria-current={pageActive ? "page" : undefined} className={`mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pageActive ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="page" className="h-6 w-6" /></button>}
+        <Link href="/profile" aria-label="Settings" title="Settings" aria-current={pathname === "/profile" ? "page" : undefined} className={`mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pathname === "/profile" ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="settings" className="h-6 w-6" /></Link>
       </nav>
     </header>
   );

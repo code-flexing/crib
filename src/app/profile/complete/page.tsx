@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
+import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { Button } from "@/components/ui/Button";
 import {
   readDraft,
@@ -773,18 +773,6 @@ export default function CompleteStudentProfilePage() {
         : "/page"
     );
 
-  const signOut = () => {
-    localStorage.removeItem(
-      "safecrib_access_token"
-    );
-
-    localStorage.removeItem(
-      "safecrib_refresh_token"
-    );
-
-    router.replace("/login");
-  };
-
   const discardDraft = () => {
     if (draftKey) {
       removeDraft(draftKey);
@@ -881,17 +869,11 @@ export default function CompleteStudentProfilePage() {
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
       <DashboardNav
         onCreatePage={openPage}
-        onSignOut={signOut}
         pageStatus={pageStatus}
       />
 
       <section className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8">
-        <Link
-          href="/dashboard"
-          className="text-sm font-medium text-safecrib-green hover:underline"
-        >
-          Back to home
-        </Link>
+        <BackHomeLink />
 
         <h1 className="mt-6 text-3xl font-medium text-safecrib-black">
           Complete your student profile

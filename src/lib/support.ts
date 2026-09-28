@@ -29,6 +29,9 @@ export function unwrapSupportList(value: unknown): SupportConversation[] {
 }
 
 export function errorMessage(error: unknown, fallback: string) {
+  if (typeof error === "object" && error !== null && "status" in error && error.status === 403) {
+    return "Support access is not enabled for this account yet.";
+  }
   if (error instanceof Error && error.message) return error.message;
   return fallback;
 }

@@ -1,11 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
+import { AccountSettingsPanel } from "@/components/settings/AccountSettingsPanel";
+import { SettingsSignOutButton } from "@/components/settings/SettingsSignOutButton";
+import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { Button } from "@/components/ui/Button";
-import { clearSession, displayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, type AccountStatus } from "@/lib/api";
+import { VerificationOverview } from "@/components/verification/VerificationOverview";
+import { clearSession, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, type AccountStatus } from "@/lib/api";
 
 type User = {
   email?: string;
@@ -47,24 +50,20 @@ export default function ProfilePage() {
     }
   }, [router]);
 
-  const signOut = () => {
-    localStorage.removeItem("safecrib_access_token");
-    localStorage.removeItem("safecrib_refresh_token");
-    router.replace("/login");
-  };
+  const role = String(user?.role ?? "").toUpperCase();
+  const studentMode = ["UNVERIFIED", "STUDENT"].includes(role);
+  const accountLabel = studentMode ? status.replaceAll("_", " ") : role ? role.replaceAll("_", " ").toLowerCase() : "Loading...";
 
   return (
     <main className="min-h-screen bg-[#f7f8f5] pb-24 md:pb-8">
-      <DashboardNav onCreatePage={() => router.push("/page/new")} onSignOut={signOut} pageStatus="none" />
+      <DashboardNav onCreatePage={() => router.push("/page/new")} pageStatus="none" />
       <section className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-10">
-        <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-medium text-safecrib-green transition-colors hover:text-[#0a5f47] hover:underline">
-          <span aria-hidden="true">←</span> Back to home
-        </Link>
+        <BackHomeLink />
 
         <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-safecrib-green">Account settings</p>
-            <h1 className="mt-3 font-display text-3xl italic text-safecrib-black sm:text-4xl">Your profile</h1>
+            <h1 className="mt-3 font-display text-3xl italic text-safecrib-black sm:text-4xl">Your settings</h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-black/60">
               Keep your details current so the SafeCrib community knows who they are connecting with.
             </p>
@@ -72,9 +71,9 @@ export default function ProfilePage() {
 
           <aside className="rounded-[14px] border border-black/10 bg-white p-5 shadow-[0_12px_30px_rgba(11,12,14,0.04)] sm:p-6">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/45">Account review</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/45">Account mode</p>
               <span className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] ${status === "rejected" ? "bg-red-50 text-red-700" : status === "pending" ? "bg-amber-50 text-amber-800" : "bg-[#eaf7f1] text-safecrib-green"}`}>
-                {status.replace("_", " ")}
+                {accountLabel}
               </span>
             </div>
             <div className="mt-4 space-y-2 break-words border-t border-black/10 pt-4 text-sm text-black/60">
@@ -83,13 +82,17 @@ export default function ProfilePage() {
                 <br />
                 {user?.email ?? "Loading..."}
               </p>
-              <p>Student</p>
+              <p>{role === "AGENT" ? "Agent account" : role === "LANDLORD" ? "Landlord account" : role === "ADMIN" ? "Administrator account" : "Student account"}</p>
             </div>
             {rejectionReason && <p className="mt-4 border-t border-red-100 pt-4 text-sm leading-5 text-red-700">{rejectionReason}</p>}
           </aside>
         </div>
 
-        {status !== "pending" && (
+        <AccountSettingsPanel />
+
+        <VerificationOverview />
+
+        {studentMode && status !== "pending" && (
           <div className="mt-8 overflow-hidden rounded-[16px] border border-black/10 bg-white shadow-[0_20px_45px_rgba(11,12,14,0.06)]">
             <div className="border-b border-black/10 bg-[#eaf7f1] px-5 py-4 sm:px-7">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Profile update</p>
@@ -107,6 +110,7 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+        <SettingsSignOutButton />
       </section>
     </main>
   );

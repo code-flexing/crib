@@ -7,7 +7,8 @@ import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
 import { InstallButton } from "@/components/pwa/InstallButton";
 import { Button } from "@/components/ui/Button";
-import { ApiError, getCurrentUser } from "@/lib/api";
+import { BackHomeLink } from "@/components/ui/BackHomeLink";
+import { ApiError, apiFetch, getCurrentUser, primeCurrentUserCache, unwrapData } from "@/lib/api";
 
 const API_URL = "/api/auth/login";
 
@@ -106,7 +107,12 @@ export default function LoginPage() {
       localStorage.setItem("safecrib_refresh_token", refreshToken);
 
       try {
-        await getCurrentUser<unknown>();
+        const currentUser = await getCurrentUser<{ role?: string }>();
+        primeCurrentUserCache(currentUser);
+        const role = String(currentUser?.role ?? "").toUpperCase();
+        const providerRole = ["AGENT", "LANDLORD"].includes(role);
+        const providerPage = await apiFetch<unknown>("/api/v1/provider-pages/me").then((response) => unwrapData<{ id?: string; status?: string } | null>(response)).catch(() => null);
+        router.push(providerRole || Boolean(providerPage && (providerPage.id || providerPage.status)) ? "/page" : "/dashboard");
       } catch (profileError) {
         if (profileError instanceof ApiError && profileError.status === 401) {
           localStorage.removeItem("safecrib_access_token");
@@ -115,10 +121,8 @@ export default function LoginPage() {
           return;
         }
 
-        // Profile approval gates actions, not authentication or dashboard access.
+        router.push("/dashboard");
       }
-
-      router.push("/dashboard");
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -207,7 +211,7 @@ export default function LoginPage() {
 
           <div className="mt-8 flex items-center justify-between gap-3">
             {step === 0 ? (
-              <Link href="/" className="text-sm font-medium text-black/65 hover:text-safecrib-black">Back home</Link>
+              <BackHomeLink href="/" label="Back home" />
             ) : (
               <button type="button" onClick={() => { setError(""); setStep((current) => current === 2 ? 1 : 0); }} className="text-sm font-medium text-black/65 hover:text-safecrib-black">Back</button>
             )}

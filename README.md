@@ -1,8 +1,8 @@
-# SafeCrib
+
 
 <p align="center">
+<img width="1366" height="519" alt="Screenshot From 2026-09-28 01-41-09" src="https://github.com/user-attachments/assets/ae992928-b7c6-4f49-ad85-00c1c88e2c98" />
 
-	<img width="1366" height="519" alt="Screenshot From 2026-09-28 01-41-09" src="https://github.com/user-attachments/assets/30f14926-991c-40c9-be54-d85dd6235c57" />
 
 	<img src="public/icons/icon-192.png" alt="SafeCrib app icon" width="96" height="96" />
 </p>

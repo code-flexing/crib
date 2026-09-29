@@ -168,8 +168,8 @@ export default function Home() {
   const handleNavigate = () => setMenuOpen(false);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-content flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">
-      <header className="sticky top-0 z-40 border-b border-black/10 bg-safecrib-white">
+    <main className="flex min-h-screen w-full flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-40 rounded-[8px] border border-black/10 bg-safecrib-white">
         <div className="mx-auto flex max-w-content items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-6 lg:px-8">
           <SafeCribLogo height={20} />
 

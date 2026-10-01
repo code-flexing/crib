@@ -451,13 +451,16 @@ export async function uploadSignedMedia(file: File, purpose: UploadPurpose, enti
     ? completionValues as CloudinaryCompletionPayload
     : undefined;
   const signedPublicId = uploadPayload.public_id;
+  const multipartPublicId = body.get("public_id");
   const signedResourceType = media.resourceType ?? media.resource_type;
+  const multipartPublicIdMatches = typeof signedPublicId === "string" && typeof multipartPublicId === "string" && multipartPublicId === signedPublicId;
   const publicIdMatches = typeof signedPublicId === "string" && signedPublicId === completionValues.public_id;
   const resourceTypeMatches = typeof signedResourceType === "string" && signedResourceType.toLowerCase() === String(completionValues.resource_type ?? "").toLowerCase();
-  const identityMismatch = (typeof signedPublicId === "string" && !publicIdMatches) ||
+  const identityMismatch = !multipartPublicIdMatches || (typeof signedPublicId === "string" && !publicIdMatches) ||
     (typeof signedResourceType === "string" && !resourceTypeMatches);
   const identityCheckDetails = [
-    typeof signedPublicId === "string" ? `public_id ${publicIdMatches ? "matches" : "differs"}` : "signed public_id unavailable",
+    `multipart public_id ${multipartPublicIdMatches ? "matches signed value" : "is missing or differs from signed value"}`,
+    typeof signedPublicId === "string" ? `Cloudinary public_id ${publicIdMatches ? "matches signed value" : "differs from signed value"}` : "signed public_id unavailable",
     typeof signedResourceType === "string" ? `resource_type ${resourceTypeMatches ? "matches" : "differs"}` : "signed resource_type unavailable",
   ].join(", ");
   let status = String(signature.status ?? media.status ?? "PENDING").toUpperCase();
@@ -484,6 +487,8 @@ export async function uploadSignedMedia(file: File, purpose: UploadPurpose, enti
     previewUrl: purpose === "AVATAR" && typeof secureUrl === "string" && secureUrl.startsWith("https://") ? secureUrl : undefined,
     completionPayload: status === "READY" ? undefined : completionPayload,
     completionError,
+    expectedPublicId: typeof signedPublicId === "string" ? signedPublicId : undefined,
+    expectedResourceType: typeof signedResourceType === "string" ? signedResourceType.toLowerCase() : undefined,
   };
 }
 

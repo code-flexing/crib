@@ -40,7 +40,7 @@ type ProviderPage = Partial<FormState> & {
 type User = { id?: string; email?: string; role?: string; displayName?: unknown };
 type MediaProcessing = { license: boolean; picture: boolean };
 type ProviderMediaKind = "license" | "picture";
-type SavedCompletion = { mediaId: string; payload: CloudinaryCompletionPayload };
+type SavedCompletion = { mediaId: string; payload: CloudinaryCompletionPayload; expectedPublicId?: string; expectedResourceType?: string };
 type ProviderDraft = { form: FormState; step: number; additionalPayoutAccounts?: PayoutAccountForm[]; profilePicturePreview?: string; mediaCompletion?: Partial<Record<ProviderMediaKind, SavedCompletion>> };
 const emptyPayoutAccount: PayoutAccountForm = { provider: "", accountName: "", accountNumber: "" };
 
@@ -246,11 +246,19 @@ export default function NewProviderPage() {
       const retryCompletion = async (kind: ProviderMediaKind, mediaId: string) => {
         const saved = mediaCompletion[kind];
         if (!saved || saved.mediaId !== mediaId) return false;
+        const publicIdMatches = !saved.expectedPublicId || saved.expectedPublicId === saved.payload.public_id;
+        const resourceTypeMatches = !saved.expectedResourceType || saved.expectedResourceType === saved.payload.resource_type.toLowerCase();
+        const comparison = `Client comparison: public_id ${publicIdMatches ? "matches" : "differs"}, resource_type ${resourceTypeMatches ? "matches" : "differs"}.`;
+        if (!publicIdMatches || !resourceTypeMatches) {
+          completionFailure = `The Cloudinary result differs from the signed upload. ${comparison}`;
+          return false;
+        }
         try {
           await completeMediaUpload(mediaId, saved.payload);
           return true;
         } catch (completionError) {
-          completionFailure = completionError instanceof Error ? completionError.message : "SafeCrib rejected the media completion request.";
+          const reason = completionError instanceof Error ? completionError.message : "SafeCrib rejected the media completion request.";
+          completionFailure = `${reason} ${comparison}`;
           return false;
         }
       };
@@ -322,7 +330,12 @@ export default function NewProviderPage() {
       const isProcessing = uploaded.status !== "READY";
       const nextMediaProcessing = { ...mediaProcessing, [kind]: isProcessing };
       const nextCompletion = { ...mediaCompletion };
-      if (uploaded.completionPayload) nextCompletion[kind] = { mediaId: uploaded.mediaId, payload: uploaded.completionPayload };
+      if (uploaded.completionPayload) nextCompletion[kind] = {
+        mediaId: uploaded.mediaId,
+        payload: uploaded.completionPayload,
+        expectedPublicId: uploaded.expectedPublicId,
+        expectedResourceType: uploaded.expectedResourceType,
+      };
       else delete nextCompletion[kind];
       setForm(nextForm);
       setMediaProcessing(nextMediaProcessing);

@@ -450,13 +450,32 @@ export async function uploadSignedMedia(file: File, purpose: UploadPurpose, enti
     typeof completionValues.signature === "string"
     ? completionValues as CloudinaryCompletionPayload
     : undefined;
+  const signedPublicId = uploadPayload.public_id;
+  const signedResourceType = media.resourceType ?? media.resource_type;
+  const publicIdMatches = typeof signedPublicId === "string" && signedPublicId === completionValues.public_id;
+  const resourceTypeMatches = typeof signedResourceType === "string" && signedResourceType.toLowerCase() === String(completionValues.resource_type ?? "").toLowerCase();
+  const identityMismatch = (typeof signedPublicId === "string" && !publicIdMatches) ||
+    (typeof signedResourceType === "string" && !resourceTypeMatches);
+  const identityCheckDetails = [
+    typeof signedPublicId === "string" ? `public_id ${publicIdMatches ? "matches" : "differs"}` : "signed public_id unavailable",
+    typeof signedResourceType === "string" ? `resource_type ${resourceTypeMatches ? "matches" : "differs"}` : "signed resource_type unavailable",
+  ].join(", ");
   let status = String(signature.status ?? media.status ?? "PENDING").toUpperCase();
-  if (purpose !== "LISTING_VIDEO" && completionPayload) {
+  let completionError: string | undefined;
+  if (purpose !== "LISTING_VIDEO" && completionPayload && identityMismatch) {
+    status = "PENDING";
+    completionError = `Cloudinary response does not match the signed upload (${identityCheckDetails}).`;
+  } else if (purpose !== "LISTING_VIDEO" && completionPayload) {
     try {
       status = await completeMediaUpload(mediaId, completionPayload);
-    } catch {
+    } catch (error) {
       status = "PENDING";
+      const reason = error instanceof Error ? error.message : "SafeCrib could not confirm the uploaded media.";
+      completionError = `${reason} Client comparison: ${identityCheckDetails}.`;
     }
+  } else if (purpose !== "LISTING_VIDEO") {
+    const missingFields = Object.entries(completionValues).filter(([, value]) => value === undefined || value === null || value === "").map(([key]) => key);
+    completionError = `Cloudinary response is missing required completion fields: ${missingFields.join(", ") || "field types are invalid"}.`;
   }
 
   return {
@@ -464,6 +483,7 @@ export async function uploadSignedMedia(file: File, purpose: UploadPurpose, enti
     status,
     previewUrl: purpose === "AVATAR" && typeof secureUrl === "string" && secureUrl.startsWith("https://") ? secureUrl : undefined,
     completionPayload: status === "READY" ? undefined : completionPayload,
+    completionError,
   };
 }
 

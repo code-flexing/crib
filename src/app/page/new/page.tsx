@@ -242,13 +242,15 @@ export default function NewProviderPage() {
     setCheckingMedia(true);
     setError("");
     try {
+      let completionFailure = "";
       const retryCompletion = async (kind: ProviderMediaKind, mediaId: string) => {
         const saved = mediaCompletion[kind];
         if (!saved || saved.mediaId !== mediaId) return false;
         try {
           await completeMediaUpload(mediaId, saved.payload);
           return true;
-        } catch {
+        } catch (completionError) {
+          completionFailure = completionError instanceof Error ? completionError.message : "SafeCrib rejected the media completion request.";
           return false;
         }
       };
@@ -275,6 +277,7 @@ export default function NewProviderPage() {
       setNotice(nextProcessing.license || nextProcessing.picture
         ? "Your upload succeeded and is saved. SafeCrib could not confirm it yet; you do not need to upload it again."
         : "Your license proof and profile picture are ready.");
+      if (completionFailure) setError(`Cloudinary accepted the upload, but SafeCrib rejected its completion: ${completionFailure}`);
       return !nextProcessing.license && !nextProcessing.picture;
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : "We could not check upload status. Your saved uploads are unchanged.");
@@ -329,6 +332,7 @@ export default function NewProviderPage() {
       setNotice(isProcessing
         ? `${kind === "picture" ? "Profile picture" : "License document"} uploaded successfully and saved. SafeCrib could not confirm it yet; you do not need to upload it again.`
         : `${kind === "picture" ? "Profile picture" : "License document"} uploaded successfully and saved to your draft.`);
+      if (uploaded.completionError) setError(`Cloudinary accepted the upload, but SafeCrib could not confirm it: ${uploaded.completionError}`);
       if (draftKey) writeDraft<ProviderDraft>(draftKey, { form: nextForm, step, additionalPayoutAccounts, profilePicturePreview: kind === "picture" ? uploaded.previewUrl : profilePicturePreview, mediaCompletion: nextCompletion });
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : `We could not upload the ${kind === "license" ? "license document" : "profile picture"}.`);

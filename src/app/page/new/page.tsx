@@ -1,12 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { PageLoader } from "@/components/loading/PageLoader";
 import { Button } from "@/components/ui/Button";
-import { apiFetch, ApiError, clearClientCache, normalizeAccountStatus, normalizePageStatus, unwrapData, uploadSignedMedia, waitForMediaReady, type AccountStatus, type PageStatus } from "@/lib/api";
+import { apiFetch, ApiError, cancelPendingUpload, clearClientCache, completeMediaUpload, getPendingUploads, normalizeAccountStatus, normalizePageStatus, resolveMediaUrl, unwrapData, uploadSignedMedia, type AccountStatus, type CloudinaryCompletionPayload, type PageStatus, type PendingUpload } from "@/lib/api";
 import { readDraft, removeDraft, writeDraft } from "@/lib/drafts";
 
 type PayoutAccountForm = { provider: string; accountName: string; accountNumber: string };
@@ -37,7 +38,10 @@ type ProviderPage = Partial<FormState> & {
   payoutAccounts?: { provider?: string; accountName?: string; accountNumber?: string } | { provider?: string; accountName?: string; accountNumber?: string }[];
 } | null;
 type User = { id?: string; email?: string; role?: string; displayName?: unknown };
-type ProviderDraft = { form: FormState; step: number; additionalPayoutAccounts?: PayoutAccountForm[] };
+type MediaProcessing = { license: boolean; picture: boolean };
+type ProviderMediaKind = "license" | "picture";
+type SavedCompletion = { mediaId: string; payload: CloudinaryCompletionPayload };
+type ProviderDraft = { form: FormState; step: number; additionalPayoutAccounts?: PayoutAccountForm[]; profilePicturePreview?: string; mediaCompletion?: Partial<Record<ProviderMediaKind, SavedCompletion>> };
 const emptyPayoutAccount: PayoutAccountForm = { provider: "", accountName: "", accountNumber: "" };
 
 const emptyForm: FormState = {
@@ -90,9 +94,17 @@ export default function NewProviderPage() {
   const [restored, setRestored] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [checkingMedia, setCheckingMedia] = useState(false);
   const [uploading, setUploading] = useState<"license" | "picture" | null>(null);
+  const [mediaProcessing, setMediaProcessing] = useState<MediaProcessing>({ license: false, picture: false });
+  const [mediaCompletion, setMediaCompletion] = useState<Partial<Record<ProviderMediaKind, SavedCompletion>>>({});
+  const [existingUploads, setExistingUploads] = useState<PendingUpload[]>([]);
+  const [profilePicturePreview, setProfilePicturePreview] = useState("");
   const [confirmProviderConversion, setConfirmProviderConversion] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const licenseFileInput = useRef<HTMLInputElement>(null);
+  const pictureFileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!localStorage.getItem("safecrib_access_token")) { router.replace("/login"); return; }
@@ -102,7 +114,8 @@ export default function NewProviderPage() {
         if (loadError instanceof ApiError && loadError.status === 404) return null;
         throw loadError;
       }),
-    ]).then(async ([user, providerPage]) => {
+      getPendingUploads().catch(() => []),
+    ]).then(async ([user, providerPage, pendingUploads]) => {
       setUser(user);
       const role = String(user.role ?? "").toUpperCase();
       if (role === "STUDENT") {
@@ -117,9 +130,39 @@ export default function NewProviderPage() {
       const key = providerDraftKey(user);
       setDraftKey(key);
       const draft = readDraft<ProviderDraft>(key);
-      setForm({ ...pageToForm(providerPage), ...(draft?.form ?? {}) });
-      setAdditionalPayoutAccounts(draft?.additionalPayoutAccounts ?? pageToPayoutAccounts(providerPage));
-      setStep(draft?.step ?? 1);
+      setProfilePicturePreview(draft?.profilePicturePreview?.startsWith("https://") ? draft.profilePicturePreview : "");
+      setMediaCompletion(draft?.mediaCompletion ?? {});
+      const restoredForm = { ...pageToForm(providerPage), ...(draft?.form ?? {}) };
+      const matchingUploads = pendingUploads.filter((upload) => ["AVATAR", "PROOF_OF_LICENSE"].includes(String(upload.purpose ?? "").toUpperCase()));
+      const newestReadyUpload = (purpose: string) => matchingUploads
+        .filter((upload) => String(upload.purpose ?? "").toUpperCase() === purpose && String(upload.status ?? "").toUpperCase() === "READY")
+        .sort((first, second) => (second.createdAt ?? "").localeCompare(first.createdAt ?? ""))[0];
+      const readyLicense = newestReadyUpload("PROOF_OF_LICENSE");
+      const readyPicture = newestReadyUpload("AVATAR");
+      const resolvedForm = {
+        ...restoredForm,
+        proofOfLicense: restoredForm.proofOfLicense || readyLicense?.id || "",
+        profilePicture: restoredForm.profilePicture || readyPicture?.id || "",
+      };
+      const restoredPayoutAccounts = draft?.additionalPayoutAccounts ?? pageToPayoutAccounts(providerPage);
+      const restoredStep = draft?.step ?? 1;
+      setForm(resolvedForm);
+      setAdditionalPayoutAccounts(restoredPayoutAccounts);
+      if (resolvedForm.proofOfLicense !== restoredForm.proofOfLicense || resolvedForm.profilePicture !== restoredForm.profilePicture) {
+        writeDraft<ProviderDraft>(key, { form: resolvedForm, step: restoredStep, additionalPayoutAccounts: restoredPayoutAccounts, profilePicturePreview: draft?.profilePicturePreview, mediaCompletion: draft?.mediaCompletion });
+      }
+      const readyMediaIds = [resolvedForm.proofOfLicense, resolvedForm.profilePicture];
+      const availableUploads = matchingUploads.filter((upload) => !readyMediaIds.includes(upload.id));
+      setExistingUploads(availableUploads);
+      const pendingStatus = (id: string) => {
+        const media = pendingUploads.find((upload) => upload.id === id);
+        return Boolean(id && media && String(media.status ?? "").toUpperCase() !== "READY");
+      };
+      setMediaProcessing({
+        license: pendingStatus(resolvedForm.proofOfLicense),
+        picture: pendingStatus(resolvedForm.profilePicture),
+      });
+      setStep(restoredStep);
       setRestored(Boolean(draft && !providerPage));
     }).catch((loadError: unknown) => {
       if (loadError instanceof ApiError && loadError.status === 401) router.replace("/login?reason=session-expired");
@@ -129,25 +172,169 @@ export default function NewProviderPage() {
 
   useEffect(() => {
     if (!draftKey) return;
-    const timeout = window.setTimeout(() => writeDraft<ProviderDraft>(draftKey, { form, step, additionalPayoutAccounts }), 400);
+    const timeout = window.setTimeout(() => writeDraft<ProviderDraft>(draftKey, { form, step, additionalPayoutAccounts, profilePicturePreview: profilePicturePreview.startsWith("https://") ? profilePicturePreview : undefined, mediaCompletion }), 400);
     return () => window.clearTimeout(timeout);
-  }, [additionalPayoutAccounts, draftKey, form, step]);
+  }, [additionalPayoutAccounts, draftKey, form, mediaCompletion, profilePicturePreview, step]);
+
+  useEffect(() => {
+    if (!form.profilePicture) {
+      setProfilePicturePreview("");
+      return;
+    }
+    let active = true;
+    void resolveMediaUrl(form.profilePicture).then((url) => {
+      if (active && url) setProfilePicturePreview(url);
+    });
+    return () => { active = false; };
+  }, [form.profilePicture, mediaProcessing.picture]);
+
+  useEffect(() => {
+    if (!profilePicturePreview.startsWith("blob:")) return;
+    const previewUrl = profilePicturePreview;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [profilePicturePreview]);
 
   const update = (field: keyof FormState, value: string) => setForm((current) => ({ ...current, [field]: value }));
   const updateAdditionalPayout = (index: number, field: keyof PayoutAccountForm, value: string) => setAdditionalPayoutAccounts((current) => current.map((account, accountIndex) => accountIndex === index ? { ...account, [field]: value } : account));
   const goToWorkspace = () => router.push("/page");
 
-  const upload = async (file: File, kind: "license" | "picture") => {
-    setUploading(kind);
+  const selectExistingUpload = async (upload: PendingUpload) => {
+    const isPicture = String(upload.purpose ?? "").toUpperCase() === "AVATAR";
+    const field = isPicture ? "profilePicture" : "proofOfLicense";
+    const processingField = isPicture ? "picture" : "license";
+    const existingId = form[field];
+    if (existingId && existingId !== upload.id) {
+      if (!window.confirm("An upload is already attached to this draft. Replace it with the existing upload you selected?")) return;
+      try {
+        const pending = await getPendingUploads().catch(() => []);
+        const previous = pending.find((item) => item.id === existingId);
+        if (previous && String(previous.status ?? "").toUpperCase() !== "READY") await cancelPendingUpload(existingId);
+      } catch (cancelError) {
+        setError(cancelError instanceof Error ? cancelError.message : "We could not replace the existing upload.");
+        return;
+      }
+    }
+    const nextForm = { ...form, [field]: upload.id };
+    const nextCompletion = { ...mediaCompletion };
+    delete nextCompletion[processingField];
+    setForm(nextForm);
+    setMediaCompletion(nextCompletion);
+    setMediaProcessing((current) => ({ ...current, [processingField]: String(upload.status ?? "").toUpperCase() !== "READY" }));
+    if (isPicture) setProfilePicturePreview("");
+    setExistingUploads((current) => current.filter((item) => item.id !== upload.id));
+    if (draftKey) writeDraft<ProviderDraft>(draftKey, { form: nextForm, step, additionalPayoutAccounts, profilePicturePreview: isPicture ? undefined : profilePicturePreview, mediaCompletion: nextCompletion });
+    setError("");
+    setNotice(String(upload.status ?? "").toUpperCase() === "READY" ? "Existing upload added to your draft." : "Existing upload saved to your draft. You do not need to upload it again.");
+  };
+
+  const discardExistingUpload = async (upload: PendingUpload) => {
+    try {
+      await cancelPendingUpload(upload.id);
+      setExistingUploads((current) => current.filter((item) => item.id !== upload.id));
+      setError("");
+      setNotice("");
+    } catch (discardError) {
+      setError(discardError instanceof Error ? discardError.message : "We could not cancel that pending upload.");
+    }
+  };
+
+  const checkMediaStatus = async () => {
+    setCheckingMedia(true);
     setError("");
     try {
-      const purpose = kind === "license" ? "PROOF_OF_LICENSE" : "AVATAR";
+      const retryCompletion = async (kind: ProviderMediaKind, mediaId: string) => {
+        const saved = mediaCompletion[kind];
+        if (!saved || saved.mediaId !== mediaId) return false;
+        try {
+          await completeMediaUpload(mediaId, saved.payload);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const [licenseCompleted, pictureCompleted] = await Promise.all([
+        retryCompletion("license", form.proofOfLicense),
+        retryCompletion("picture", form.profilePicture),
+      ]);
+      const pending = await getPendingUploads();
+      const isReady = async (mediaId: string, completionSucceeded: boolean) => {
+        if (!mediaId) return false;
+        if (completionSucceeded) return true;
+        const item = pending.find((upload) => upload.id === mediaId);
+        if (item) return String(item.status ?? "").toUpperCase() === "READY";
+        const access = unwrapData<unknown>(await apiFetch<unknown>(`/api/v1/media/${encodeURIComponent(mediaId)}/access`).catch(() => null));
+        return typeof access === "string" || (typeof access === "object" && access !== null && ["url", "accessUrl", "deliveryUrl"].some((key) => typeof (access as Record<string, unknown>)[key] === "string"));
+      };
+      const [licenseReady, pictureReady] = await Promise.all([isReady(form.proofOfLicense, licenseCompleted), isReady(form.profilePicture, pictureCompleted)]);
+      const nextProcessing = { license: Boolean(form.proofOfLicense) && !licenseReady, picture: Boolean(form.profilePicture) && !pictureReady };
+      setMediaProcessing(nextProcessing);
+      const nextCompletion = { ...mediaCompletion };
+      if (licenseReady) delete nextCompletion.license;
+      if (pictureReady) delete nextCompletion.picture;
+      setMediaCompletion(nextCompletion);
+      setNotice(nextProcessing.license || nextProcessing.picture
+        ? "Your upload succeeded and is saved. SafeCrib could not confirm it yet; you do not need to upload it again."
+        : "Your license proof and profile picture are ready.");
+      return !nextProcessing.license && !nextProcessing.picture;
+    } catch (statusError) {
+      setError(statusError instanceof Error ? statusError.message : "We could not check upload status. Your saved uploads are unchanged.");
+      return false;
+    } finally {
+      setCheckingMedia(false);
+    }
+  };
+
+  const upload = async (file: File, kind: "license" | "picture") => {
+    const field = kind === "license" ? "proofOfLicense" : "profilePicture";
+    const purpose = kind === "license" ? "PROOF_OF_LICENSE" : "AVATAR";
+    const existingId = form[field];
+    if (existingId) {
+      const confirmed = window.confirm("An upload is already saved in this draft. Replace it? A pending upload will be canceled first.");
+      if (!confirmed) return;
+      try {
+        const pending = await getPendingUploads().catch(() => []);
+        const previous = pending.find((item) => item.id === existingId);
+        if (previous && String(previous.status ?? "").toUpperCase() !== "READY") {
+          await cancelPendingUpload(existingId);
+          const clearedForm = { ...form, [field]: "" };
+          const nextCompletion = { ...mediaCompletion };
+          delete nextCompletion[kind];
+          setForm(clearedForm);
+          setMediaCompletion(nextCompletion);
+          if (kind === "picture") setProfilePicturePreview("");
+          setMediaProcessing((current) => ({ ...current, [kind]: false }));
+          if (draftKey) writeDraft<ProviderDraft>(draftKey, { form: clearedForm, step, additionalPayoutAccounts, profilePicturePreview: kind === "picture" ? undefined : profilePicturePreview, mediaCompletion: nextCompletion });
+        }
+      } catch (cancelError) {
+        setError(cancelError instanceof Error ? cancelError.message : "We could not replace the existing upload.");
+        return;
+      }
+    }
+    setUploading(kind);
+    setError("");
+    setNotice("");
+    try {
       const uploaded = await uploadSignedMedia(file, purpose);
-      if (uploaded.status !== "READY") await waitForMediaReady(uploaded.mediaId);
-      update(kind === "license" ? "proofOfLicense" : "profilePicture", uploaded.mediaId);
+      const nextForm = { ...form, [field]: uploaded.mediaId };
+      const isProcessing = uploaded.status !== "READY";
+      const nextMediaProcessing = { ...mediaProcessing, [kind]: isProcessing };
+      const nextCompletion = { ...mediaCompletion };
+      if (uploaded.completionPayload) nextCompletion[kind] = { mediaId: uploaded.mediaId, payload: uploaded.completionPayload };
+      else delete nextCompletion[kind];
+      setForm(nextForm);
+      setMediaProcessing(nextMediaProcessing);
+      setMediaCompletion(nextCompletion);
+      setExistingUploads((current) => current.filter((item) => item.id !== uploaded.mediaId));
+      if (kind === "picture") setProfilePicturePreview(uploaded.previewUrl ?? URL.createObjectURL(file));
+      setNotice(isProcessing
+        ? `${kind === "picture" ? "Profile picture" : "License document"} uploaded successfully and saved. SafeCrib could not confirm it yet; you do not need to upload it again.`
+        : `${kind === "picture" ? "Profile picture" : "License document"} uploaded successfully and saved to your draft.`);
+      if (draftKey) writeDraft<ProviderDraft>(draftKey, { form: nextForm, step, additionalPayoutAccounts, profilePicturePreview: kind === "picture" ? uploaded.previewUrl : profilePicturePreview, mediaCompletion: nextCompletion });
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : `We could not upload the ${kind === "license" ? "license document" : "profile picture"}.`);
-    } finally { setUploading(null); }
+    } finally {
+      setUploading(null);
+    }
   };
 
   const validateStep = (target: number) => {
@@ -175,12 +362,20 @@ export default function NewProviderPage() {
       return;
     }
     if (["SUBMITTED", "UNDER_REVIEW", "VERIFIED"].includes(status)) { setError("This provider Page has already been submitted or approved. Refresh its status before continuing."); return; }
+    if (mediaProcessing.license || mediaProcessing.picture) {
+      const mediaReady = await checkMediaStatus();
+      if (!mediaReady) {
+        setNotice("Your uploads succeeded and are saved, but SafeCrib has not confirmed them ready yet. Stay on this step and check status again; do not upload them again.");
+        return;
+      }
+    }
     if (String(user?.role ?? "").toUpperCase() === "STUDENT" && !confirmedConversion) {
       setConfirmProviderConversion(true);
       return;
     }
     setSaving(true);
     setError("");
+    setNotice("");
     try {
       const payload = {
         displayName: form.displayName.trim(), description: form.description.trim(), phone: form.phone.trim(),
@@ -219,9 +414,13 @@ export default function NewProviderPage() {
     if (draftKey) removeDraft(draftKey);
     setForm(pageToForm(null));
     setAdditionalPayoutAccounts([]);
+    setMediaCompletion({});
+    setProfilePicturePreview("");
+    setMediaProcessing({ license: false, picture: false });
     setStep(1);
     setRestored(false);
     setError("");
+    setNotice("");
   };
 
   if (loading) return <PageLoader label="Loading provider setup" />;
@@ -238,7 +437,21 @@ export default function NewProviderPage() {
       {status === "REJECTED" && <div className="mt-5 border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700"><p>Your Page was not approved. Update the information and submit it again.</p>{rejectionNotes && <p className="mt-2">Review note: {rejectionNotes}</p>}</div>}
       {restored && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border border-safecrib-green/20 bg-[#EAF7F1] px-4 py-3 text-sm text-safecrib-green"><span>Draft restored. Your progress is saved on this device.</span><button type="button" onClick={discardDraft} className="font-medium underline">Discard draft</button></div>}
       {error && <p className="mt-5 border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700" role="alert">{error}</p>}
-
+      {notice && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border border-safecrib-green/20 bg-[#EAF7F1] p-4 text-sm leading-6 text-safecrib-green" role="status" aria-live="polite"><p>{notice}</p>{(mediaProcessing.license || mediaProcessing.picture) && <Button type="button" variant="secondary" loading={checkingMedia} disabled={checkingMedia} onClick={() => void checkMediaStatus()}>Check status</Button>}</div>}
+      {step === 2 && existingUploads.length > 0 && <div className="mt-5 grid gap-3 border border-safecrib-green/20 bg-[#EAF7F1] p-4 text-sm text-safecrib-green" role="status">
+        <div><p className="font-medium">Existing uploads found</p><p className="mt-1 leading-6">Reuse an existing upload instead of creating another and using more of your upload allowance.</p></div>
+        {existingUploads.map((upload) => {
+          const isPicture = String(upload.purpose ?? "").toUpperCase() === "AVATAR";
+          const uploadStatus = String(upload.status ?? "PENDING").toUpperCase();
+          return <div key={upload.id} className="flex flex-wrap items-center justify-between gap-3 border-t border-safecrib-green/15 pt-3">
+            <span>{isPicture ? "Profile picture" : "License proof"} · {uploadStatus} · {upload.id.slice(0, 8)}</span>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" onClick={() => selectExistingUpload(upload)}>Use existing upload</Button>
+              {uploadStatus !== "READY" && <Button type="button" variant="secondary" onClick={() => void discardExistingUpload(upload)}>Cancel pending upload</Button>}
+            </div>
+          </div>;
+        })}
+      </div>}
       <form onSubmit={(event) => event.preventDefault()} noValidate className="mt-8 border border-black/10 bg-white p-5 sm:p-7">
         <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-safecrib-green">Step {step} of 3</p><span className="text-xs text-black/45">{Math.round((step / 3) * 100)}%</span></div>
         <div className="mt-3 h-2 overflow-hidden bg-black/5"><div className="h-full bg-safecrib-green transition-[width] duration-300" style={{ width: `${(step / 3) * 100}%` }} /></div>
@@ -246,7 +459,34 @@ export default function NewProviderPage() {
 
         {step === 1 && <div className="mt-7 grid gap-5"><div className="grid gap-5 sm:grid-cols-2"><label className="block text-sm font-medium">Provider type<select value={form.providerType} onChange={(event) => update("providerType", event.target.value as FormState["providerType"])} className="mt-2 w-full border border-black/15 bg-white px-4 py-3 font-normal"><option value="AGENT">Agent</option><option value="LANDLORD">Landlord</option></select></label>{input("displayName", "Page display name", true, "text", 120)}</div><div className="grid gap-5 sm:grid-cols-2">{input("businessName", "Business name")}{input("businessAddress", "Business address")}</div>{input("phone", "Phone number", false, "tel", 30)}{input("additionalContactNumbers", "Additional phone numbers (comma separated)")}<label className="block text-sm font-medium">Description<textarea maxLength={2000} rows={4} value={form.description} onChange={(event) => update("description", event.target.value)} className="mt-2 w-full resize-y border border-black/15 px-4 py-3 font-normal focus:border-safecrib-green focus:outline-none" placeholder="Tell students about your accommodation service" /><span className="mt-1 block text-right text-xs font-normal text-black/45">{form.description.length}/2,000</span></label></div>}
 
-        {step === 2 && <div className="mt-7 grid gap-5"><div><h2 className="text-lg font-medium">Verification documents</h2><p className="mt-2 text-sm leading-6 text-black/55">Upload a license or business proof and a profile image. Sensitive proof documents are uploaded through the media service.</p></div><label className={`flex min-h-40 cursor-pointer flex-col items-center justify-center border border-dashed border-black/20 p-5 text-center hover:border-safecrib-green ${uploading ? "pointer-events-none opacity-60" : ""}`}><span className="text-2xl text-safecrib-green">↑</span><span className="mt-2 text-sm font-medium">{uploading === "license" ? "Uploading license proof..." : form.proofOfLicense ? "License proof uploaded" : "Upload license proof *"}</span><span className="mt-1 text-xs text-black/50">PDF, JPEG, PNG, or WebP</span><input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" disabled={Boolean(uploading)} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, "license"); }} className="sr-only" /></label>{form.proofOfLicense && <p className="text-xs text-safecrib-green">License document is ready to submit.</p>}<label className={`flex min-h-40 cursor-pointer flex-col items-center justify-center border border-dashed border-black/20 p-5 text-center hover:border-safecrib-green ${uploading ? "pointer-events-none opacity-60" : ""}`}><span className="text-2xl text-safecrib-green">↑</span><span className="mt-2 text-sm font-medium">{uploading === "picture" ? "Uploading profile picture..." : form.profilePicture ? "Profile picture uploaded" : "Upload profile picture *"}</span><span className="mt-1 text-xs text-black/50">JPEG, PNG, WebP, or GIF</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={Boolean(uploading)} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, "picture"); }} className="sr-only" /></label>{form.profilePicture && <p className="text-xs text-safecrib-green">Profile image is ready to submit.</p>}</div>}
+        {step === 2 && <div className="mt-7 grid gap-5">
+          <div><h2 className="text-lg font-medium">Verification documents</h2><p className="mt-2 text-sm leading-6 text-black/55">Upload a license or business proof and a profile image. Sensitive proof documents are uploaded through the media service.</p></div>
+          <label className={`flex min-h-40 flex-col items-center justify-center border border-dashed border-black/20 p-5 text-center ${form.proofOfLicense ? "cursor-not-allowed bg-black/[0.02]" : "cursor-pointer hover:border-safecrib-green"} ${uploading ? "pointer-events-none opacity-60" : ""}`}>
+            <span className="text-2xl text-safecrib-green">↑</span>
+            <span className="mt-2 text-sm font-medium">{uploading === "license" ? "Uploading license proof..." : form.proofOfLicense ? "License proof uploaded successfully" : "Upload license proof *"}</span>
+            <span className="mt-1 text-xs text-black/50">PDF, JPEG, PNG, or WebP</span>
+            <input ref={licenseFileInput} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" disabled={Boolean(uploading) || Boolean(form.proofOfLicense && mediaProcessing.license)} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, "license"); }} className="sr-only" />
+          </label>
+          {form.proofOfLicense && <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-safecrib-green"><span>{mediaProcessing.license ? "License upload successful and saved to your draft." : "License document is ready to submit."}</span>{!mediaProcessing.license && <Button type="button" variant="secondary" onClick={() => licenseFileInput.current?.click()}>Replace license proof</Button>}</div>}
+
+          <div className="grid gap-4 border border-black/10 p-4 sm:grid-cols-[6rem_1fr] sm:items-center">
+            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-black/10 bg-[#F4F7F6]">
+              {profilePicturePreview
+                ? <Image src={profilePicturePreview} alt="Uploaded profile picture preview" width={96} height={96} unoptimized className="h-24 w-24 object-cover" />
+                : <span className="px-2 text-center text-xs text-black/45">The saved image preview is not available yet.</span>}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">{uploading === "picture" ? "Uploading profile picture..." : form.profilePicture ? "Profile picture uploaded successfully" : "Upload profile picture *"}</p>
+                <p className="mt-1 text-xs text-black/50">JPEG, PNG, WebP, or GIF</p>
+                {form.profilePicture && <p className="mt-2 text-xs text-safecrib-green">{mediaProcessing.picture ? "Profile picture uploaded successfully and saved to your draft." : "Profile image is ready to submit."}</p>}
+              </div>
+              {!form.profilePicture && <Button type="button" variant="secondary" disabled={Boolean(uploading)} onClick={() => pictureFileInput.current?.click()}>Choose profile picture</Button>}
+              {form.profilePicture && !mediaProcessing.picture && <Button type="button" variant="secondary" disabled={Boolean(uploading)} onClick={() => pictureFileInput.current?.click()}>Replace profile picture</Button>}
+            </div>
+            <input ref={pictureFileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={Boolean(uploading) || Boolean(form.profilePicture && mediaProcessing.picture)} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload(file, "picture"); }} className="sr-only" />
+          </div>
+        </div>}
 
         {step === 3 && <div className="mt-7 grid gap-5">
           <section aria-labelledby="payout-accounts-heading" className="grid gap-5">
@@ -265,7 +505,7 @@ export default function NewProviderPage() {
             {additionalPayoutAccounts.length < 9 && <Button type="button" variant="secondary" onClick={() => setAdditionalPayoutAccounts((current) => [...current, { ...emptyPayoutAccount }])}>Add payout account</Button>}
           </section>
           <div className="grid gap-5 sm:grid-cols-2">{input("linkedin", "LinkedIn link")}{input("website", "Website link")}</div>
-          <div className="border-t border-black/10 pt-5"><h2 className="text-base font-medium">Ready to submit</h2><p className="mt-2 text-sm leading-6 text-black/55">Submitting sends your Page to admin review. You cannot edit it while it is pending. If rejected, you can update and resubmit.</p><dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2"><dt className="text-black/50">Page name</dt><dd>{form.displayName || "Not set"}</dd><dt className="text-black/50">Provider type</dt><dd>{form.providerType}</dd><dt className="text-black/50">Payout accounts</dt><dd>{additionalPayoutAccounts.length + 1}</dd><dt className="text-black/50">License proof</dt><dd>{form.proofOfLicense ? "Ready" : "Missing"}</dd><dt className="text-black/50">Profile image</dt><dd>{form.profilePicture ? "Ready" : "Missing"}</dd></dl></div>
+          <div className="border-t border-black/10 pt-5"><h2 className="text-base font-medium">Ready to submit</h2><p className="mt-2 text-sm leading-6 text-black/55">Submitting sends your Page to admin review. You cannot edit it while it is pending. If rejected, you can update and resubmit.</p><dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2"><dt className="text-black/50">Page name</dt><dd>{form.displayName || "Not set"}</dd><dt className="text-black/50">Provider type</dt><dd>{form.providerType}</dd><dt className="text-black/50">Payout accounts</dt><dd>{additionalPayoutAccounts.length + 1}</dd><dt className="text-black/50">License proof</dt><dd>{form.proofOfLicense ? mediaProcessing.license ? "Uploaded; awaiting confirmation" : "Ready" : "Missing"}</dd><dt className="text-black/50">Profile image</dt><dd>{form.profilePicture ? mediaProcessing.picture ? "Uploaded; awaiting confirmation" : "Ready" : "Missing"}</dd></dl></div>
         </div>}
 
         <div className="mt-8 flex flex-wrap justify-between gap-3 border-t border-black/10 pt-5"><div>{step > 1 && <Button type="button" variant="secondary" onClick={() => { setError(""); setStep((current) => current - 1); }}>Back</Button>}</div>{step < 3 ? <Button type="button" disabled={Boolean(uploading)} onClick={next}>Next</Button> : <Button type="button" loading={saving} disabled={Boolean(uploading)} onClick={() => void submit()}>{status === "REJECTED" ? "Update and submit for review" : "Submit Page for review"}</Button>}</div>

@@ -301,6 +301,19 @@ function recordValue(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
 }
 
+function objectFieldPaths(value: unknown, prefix = "", depth = 0): string[] {
+  if (depth > 3) return [];
+  const paths: string[] = [];
+  for (const [key, nested] of Object.entries(recordValue(value))) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    paths.push(path);
+    if (paths.length >= 30) break;
+    paths.push(...objectFieldPaths(nested, path, depth + 1).slice(0, 30 - paths.length));
+    if (paths.length >= 30) break;
+  }
+  return paths;
+}
+
 export type UploadPurpose = "AVATAR" | "COVER_PHOTO" | "LISTING_PHOTO" | "LISTING_VIDEO" | "PROVIDER_LOGO" | "STUDENT_ID" | "PROOF_OF_STUDENTSHIP" | "PROOF_OF_LICENSE" | "CONTRACT_DOCUMENT";
 
 export type PendingUpload = {
@@ -347,18 +360,68 @@ export async function uploadDocument(file: File, purpose: UploadPurpose, entityI
 
 export type ListingMediaPurpose = "LISTING_PHOTO" | "LISTING_VIDEO";
 
+export type CloudinaryCompletionPayload = {
+  asset_id: string;
+  public_id: string;
+  resource_type: string;
+  version: number;
+  signature: string;
+};
+
+export async function completeMediaUpload(mediaId: string, payload: CloudinaryCompletionPayload) {
+  const response = unwrapData<unknown>(await apiFetch<unknown>(`/api/v1/media/${encodeURIComponent(mediaId)}/complete`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }));
+  const responseRecord = recordValue(response);
+  const media = recordValue(responseRecord.media ?? responseRecord);
+  const status = String(media.status ?? "").toUpperCase();
+  if (media.id !== mediaId || status !== "READY") {
+    throw new Error("SafeCrib did not confirm the uploaded media as ready.");
+  }
+  return status;
+}
+
 export async function uploadSignedMedia(file: File, purpose: UploadPurpose, entityId?: string) {
-  const signatureResponse = unwrapData<unknown>(await apiFetch<unknown>("/api/v1/media/upload-signature", {
+  let signatureResponse: unknown = await apiFetch<unknown>("/api/v1/media/upload-signature", {
     method: "POST",
     body: JSON.stringify({ purpose, contentType: file.type, sizeBytes: file.size, ...(entityId ? { entityId } : {}) }),
-  }));
-  const signature = recordValue(signatureResponse);
-  const uploadPayload = recordValue(signature.uploadPayload ?? signature.payload);
-  const uploadUrl = signature.uploadUrl ?? signature.upload_url ?? signature.url ?? uploadPayload.uploadUrl ?? uploadPayload.url;
-  const mediaId = signature.mediaId ?? signature.id ?? recordValue(signature.media).id;
+  });
+  for (let depth = 0; depth < 3; depth += 1) {
+    const wrapper = recordValue(signatureResponse);
+    const nested = wrapper.data ?? wrapper.result;
+    if (nested === undefined) break;
+    signatureResponse = nested;
+  }
 
-  if (typeof uploadUrl !== "string" || typeof mediaId !== "string") {
-    throw new Error("The media service did not return a usable signed upload.");
+  const responseRecord = recordValue(signatureResponse);
+  const signature = recordValue(responseRecord.uploadSignature ?? responseRecord.upload_signature ?? responseRecord);
+  const upload = recordValue(signature.upload ?? signature.cloudinary ?? signature.cloudinaryUpload ?? signature.cloudinary_upload);
+  const uploadPayload = recordValue(
+    signature.uploadPayload ?? signature.upload_payload ?? signature.payload ?? signature.fields ?? signature.params ??
+    upload.uploadPayload ?? upload.upload_payload ?? upload.payload ?? upload.fields ?? upload.params,
+  );
+  const media = recordValue(signature.media ?? upload.media);
+  const cloudName = uploadPayload.cloud_name ?? uploadPayload.cloudName ?? upload.cloud_name ?? upload.cloudName;
+  const rawResourceType = media.resourceType ?? media.resource_type ?? signature.resourceType ?? signature.resource_type ?? upload.resourceType ?? upload.resource_type;
+  const resourceType = typeof rawResourceType === "string" ? rawResourceType.toLowerCase() : "";
+  const derivedUploadUrl = typeof cloudName === "string" && /^[a-zA-Z0-9_-]+$/.test(cloudName) &&
+    ["image", "video", "raw", "auto"].includes(resourceType)
+    ? `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/${resourceType}/upload`
+    : undefined;
+  const uploadUrl = signature.uploadUrl ?? signature.upload_url ?? signature.url ??
+    upload.uploadUrl ?? upload.upload_url ?? upload.url ?? derivedUploadUrl;
+  const mediaId = signature.mediaId ?? signature.media_id ?? signature.id ?? media.id ?? media.mediaId ?? media.media_id ?? upload.mediaId ?? upload.media_id;
+
+  if (typeof uploadUrl !== "string" || typeof mediaId !== "string" || Object.keys(uploadPayload).length === 0) {
+    const missing = [
+      ...(typeof uploadUrl === "string" ? [] : ["uploadUrl"]),
+      ...(typeof mediaId === "string" ? [] : ["media.id or mediaId"]),
+      ...(Object.keys(uploadPayload).length ? [] : ["uploadPayload"]),
+    ];
+    const fields = objectFieldPaths(signatureResponse);
+    const fieldDetails = fields.length ? ` Available response fields: ${fields.join(", ")}.` : "";
+    throw new Error(`The media service response is missing ${missing.join(", ")}.${fieldDetails} Please retry or contact support.`);
   }
 
   const body = new FormData();
@@ -371,8 +434,37 @@ export async function uploadSignedMedia(file: File, purpose: UploadPurpose, enti
 
   const response = await fetch(uploadUrl, { method: "POST", body });
   if (!response.ok) throw new ApiError(response.status, "The file could not be uploaded. Please retry.");
+  const uploadResult = recordValue(await response.json().catch(() => null));
+  const secureUrl = uploadResult.secure_url;
+  const completionValues = {
+    asset_id: uploadResult.asset_id,
+    public_id: uploadResult.public_id,
+    resource_type: uploadResult.resource_type,
+    version: uploadResult.version,
+    signature: uploadResult.signature,
+  };
+  const completionPayload = typeof completionValues.asset_id === "string" &&
+    typeof completionValues.public_id === "string" &&
+    typeof completionValues.resource_type === "string" &&
+    typeof completionValues.version === "number" &&
+    typeof completionValues.signature === "string"
+    ? completionValues as CloudinaryCompletionPayload
+    : undefined;
+  let status = String(signature.status ?? media.status ?? "PENDING").toUpperCase();
+  if (purpose !== "LISTING_VIDEO" && completionPayload) {
+    try {
+      status = await completeMediaUpload(mediaId, completionPayload);
+    } catch {
+      status = "PENDING";
+    }
+  }
 
-  return { mediaId, status: String(signature.status ?? recordValue(signature.media).status ?? "PENDING").toUpperCase() };
+  return {
+    mediaId,
+    status,
+    previewUrl: purpose === "AVATAR" && typeof secureUrl === "string" && secureUrl.startsWith("https://") ? secureUrl : undefined,
+    completionPayload: status === "READY" ? undefined : completionPayload,
+  };
 }
 
 export async function uploadListingMedia(file: File, purpose: ListingMediaPurpose, listingId: string) {
@@ -384,8 +476,10 @@ export async function waitForMediaReady(mediaId: string) {
     const uploads = await getPendingUploads().catch(() => []);
     const item = uploads.find((upload) => upload.id === mediaId);
     if (String(item?.status ?? "").toUpperCase() === "READY") return;
-    const access = unwrapData<unknown>(await apiFetch<unknown>(`/api/v1/media/${encodeURIComponent(mediaId)}/access`).catch(() => null));
-    if (typeof access === "string" || (typeof access === "object" && access !== null && ["url", "accessUrl", "deliveryUrl"].some((key) => typeof (access as Record<string, unknown>)[key] === "string"))) return;
+    if (!item) {
+      const access = unwrapData<unknown>(await apiFetch<unknown>(`/api/v1/media/${encodeURIComponent(mediaId)}/access`).catch(() => null));
+      if (typeof access === "string" || (typeof access === "object" && access !== null && ["url", "accessUrl", "deliveryUrl"].some((key) => typeof (access as Record<string, unknown>)[key] === "string"))) return;
+    }
     await new Promise((resolve) => window.setTimeout(resolve, 2000));
   }
   throw new Error("The upload is complete, but media processing is still in progress. Refresh before retrying.");

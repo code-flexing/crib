@@ -29,6 +29,7 @@ coverage/
 # ==============================
 *.log
 npm-debug.log*
+lerna-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
@@ -65,8 +66,16 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 
 .idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+.sublime-workspace
 *.swp
 *.swo
 
@@ -75,3 +84,15 @@ Thumbs.db
 # ==============================
 tmp/
 temp/
+.temp
+.tmp
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Test output
+/.nyc_output

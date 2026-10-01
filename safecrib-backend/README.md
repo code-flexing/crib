@@ -1,148 +1,81 @@
-<img width="1536" height="1024" alt="ChatGPT Image Sep 17, 2026, 12_50_57 AM" src="https://github.com/user-attachments/assets/60b10e6a-5045-42f0-ab56-f4ae23c9518d" />
+# SafeCrib — Backend
 
+NestJS + PostgreSQL + Prisma + BullMQ backend for the SafeCrib platform.
+The trust engine is the core product — every architectural decision protects
+the guarantee that a student will not pay a deposit for a fake, already-sold,
+or misrepresented room.
 
+**Version:** 1.0.0
 
-**SafeCrib — The trust layer for student housing.**
+## Quick Start
 
-SafeCrib protects students from scams, double-booked rooms, and misrepresented
-listings. Every architectural decision — perceptual image hashing, a booking
-state machine with database-level locks, append-only trust-event ledgers, and
-refresh-token rotation — exists to guarantee a student will not pay a deposit
-for a fake, already-sold, or fraudulent room.
+```bash
+# Install dependencies
+npm install
 
----
+# Start PostgreSQL (Docker)
+docker run -d --name postgres-safecrib \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=safecrib_dev \
+  -p 5432:5432 postgres:16-alpine
 
-## Table of contents
+# Start Redis (Docker) with a durable queue policy
+docker run -d --name redis-safecrib -p 6379:6379 redis:7-alpine \
+   redis-server --maxmemory-policy noeviction
 
-- [Architecture](#architecture)
-- [Tech stack](#tech-stack)
-- [Monorepo structure](#monorepo-structure)
-- [Data model](#data-model)
-- [Backend modules](#backend-modules)
-- [API](#api)
-- [Environment variables](#environment-variables)
-- [Scripts](#scripts)
-- [Testing](#testing)
-- [Roadmap](#roadmap)
-- [Non-functional considerations](#non-functional-considerations)
+# Apply database migrations
+npx prisma migrate dev
 
----
+# Start the API server
+npm run start:dev
+
+# Start background job workers (separate terminal)
+npm run start:worker:dev
+```
+
+## Environment Variables
+
+See `.env.example` for all available variables. Key ones:
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `DIRECT_URL` | PostgreSQL connection for Prisma migrations |
+| `REDIS_URL` | Redis connection for BullMQ queues |
+| `REDIS_ENFORCE_NOEVICTION` | When `true`, verify/repair Redis `maxmemory-policy`; set `false` for managed providers that reject `CONFIG SET` |
+| `JWT_ACCESS_SECRET` | Access token signing secret |
+| `JWT_REFRESH_SECRET` | Refresh token signing secret |
+| `BREVO_API_KEY` | Brevo transactional-email API key |
+| `BREVO_SENDER_EMAIL` | Sender address verified in Brevo |
+| `SMTP_FROM` | Compatibility fallback sender address when `BREVO_SENDER_EMAIL` is not set |
+| `BREVO_SENDER_NAME` | Display name for transactional email |
+
+Before sending, verify the sender/domain in Brevo and keep the Brevo API key and sender address in the environment.
+
+BullMQ works best with Redis `maxmemory-policy noeviction`. For Render or another
+managed Redis provider that reports `allkeys-lru` or rejects `CONFIG SET`, set
+`REDIS_ENFORCE_NOEVICTION=false` and configure the policy in the Redis service
+settings when possible. Changing `REDIS_URL` in the web service cannot change a
+Redis server policy. Restart the API and worker services after changing these
+settings.
+
+Brevo failures are logged with the HTTP status, Brevo error code/message, and
+Brevo request ID (when supplied), so delivery issues can be diagnosed without
+logging the API key.
 
 ## Architecture
 
-Three surfaces talk to one backend. The web dashboard and mobile app consume the
-same NestJS API — they never talk to Postgres/Redis directly.
+The codebase separates **pure domain logic** (trust scoring, duplicate detection,
+booking state machine) from **NestJS orchestration**. This ensures the most
+trust-critical code is fully unit-testable without any framework or database
+setup.
 
 ```
-                          +---------------------------+
-                          |      Next.js Web App       |
-                          |  (listings, bookings,      |
-                          |   trust scores, messages)   |
-                          +--------------+-------------+
-                                         |
-                                         |  REST / WebSocket
-                                         v
- +------------------+   +---------------------------+   +------------------+
- |  Students        |<->|     NestJS Backend API     |<->|  Postgres (DB)   |
- |  (web clients)   |   |  - Auth (JWT + refresh)    |   |  users, listings, |
- +---------+--------+   |  - Listing module          |   |  bookings, trust |
-           |            |  - Booking state machine   |   |  events, reviews |
-           v            |  - Trust score engine      |   +------------------+
- +------------------+     |  - Fraud & duplicate       |   +------------------+
- |  AI Agents       |     |    detection               |-->|  Redis (cache /  |
- |  (fraud scanning, |     +---------------+-------------+   |  job queue)      |
- |   text analysis)  |                     |                  +------------------+
- +--------------------+                    | reads/writes
-                                           v
-                                  +---------------------------+
-                                  |  Background Workers        |
-                                  |  (BullMQ: email, image-    |
-                                  |   hash, trust-recompute,   |
-                                  |   booking-hold-expiry,     |
-                                  |   duplicate-sweep)          |
-                                  +---------------------------+
+src/
+  domain/       ← pure logic (trust, fraud, booking) — zero framework imports
+  infra/        ← PrismaService, MailService, BullMQ queue processors
+  modules/      ← NestJS controllers + thin services wrapping domain engines
 ```
-
-**Key boundary:** the web app is a human-facing surface that consumes the same
-NestJS API as background AI agents. No direct database access from the frontend.
-
----
-
-## Tech stack
-
-| Layer | Technology | Why |
-|---|---|---|
-| Web frontend | Next.js (App Router) + TypeScript + Tailwind CSS | Server Components for fast page loads |
-| Backend API | NestJS + TypeScript | Modular structure maps 1:1 onto trust-domain boundaries |
-| Database | PostgreSQL (via Prisma) | Relational data with strong consistency guarantees |
-| Cache / queue | Redis + BullMQ | Background jobs: email, pHash, trust-recompute, hold expiry, duplicate sweep |
-| Auth | JWT (access + rotated refresh tokens) + Argon2id | Short-lived access tokens; refresh tokens rotated and stored hashed |
-| Images | Sharp + pHash (DCT-based) | Perceptual hashing catches stolen listing photos |
-| Rate limiting | @nestjs/throttler | Per-IP + per-endpoint limits on auth and fraud endpoints |
-
----
-
-## Monorepo structure
-
-```
-safecrib/
-├── apps/
-│   └── web/                   # Next.js web application
-│       ├── app/               # App Router: auth, dashboard, marketing
-│       ├── components/        # Reusable UI components
-│       ├── lib/               # API client, auth, query client
-│       ├── hooks/             # React hooks
-│       ├── middleware.ts      # Route guards
-│       └── .env.example
-├── safecrib-backend/          # NestJS backend
-│   ├── src/
-│   │   ├── main.ts            # Bootstrap, security headers, CORS, validation, Swagger
-│   │   ├── app.module.ts      # Root module — wires all modules + processors
-│   │   ├── common/            # Guards, decorators, filters
-│   │   ├── domain/            # Pure logic (trust, fraud, booking) — no framework imports
-│   │   ├── infra/             # PrismaService, MailService, BullMQ queue processors
-│   │   └── modules/           # NestJS controllers + thin services wrapping domain engines
-│   ├── prisma/                # Schema + migrations
-│   ├── test/                  # E2e tests
-│   └── package.json
-├── .github/workflows/cy.yml   # CI
-├── package-lock.json
-└── netlify.toml
-```
-
----
-
-## Data model
-
-Core entities owned by the backend:
-
-| Entity | Key fields |
-|---|---|
-| `User` | `id`, `email`, `passwordHash`, `role`, `emailVerified`, `identityVerified`, `trustScore` |
-| `Listing` | `ownerId`, `title`, `description`, `price`, `lat`, `lng`, `status` |
-| `ListingPhoto` | `listingId`, `url`, `phash` |
-| `Booking` | `listingId`, `studentId`, `status`, `depositAmount`, `holdExpiresAt` |
-| `Review` | `bookingId` (unique), `reviewerId`, `revieweeId`, `rating`, `text` |
-| `TrustEvent` | `userId`, `eventType`, `weight`, `occurredAt`, `payload` — append-only |
-| `FraudReport` | `reporterId`, `targetUserId`/`targetListingId`, `type`, `status` |
-| `DuplicateFlag` | `listingIdA`, `listingIdB`, `matchType`, `similarity`, `status` |
-| `RefreshToken` | `userId`, `tokenHash`, `revoked`, `expiresAt` |
-| `EmailVerificationToken` | `userId`, `tokenHash`, `expiresAt` |
-| `PasswordResetToken` | `userId`, `tokenHash`, `expiresAt` |
-
----
-
-## Backend modules
-
-| Module | Responsibility |
-|---|---|
-| `auth` | Registration, login, JWT access + refresh tokens, email verification, password reset |
-| `users` | Profile CRUD, password change |
-| `listings` | Create/edit listings, photo upload with pHash duplicate detection |
-| `bookings` | Deposit hold + concurrent-hold locking, state machine (AVAILABLE→HELD→BOOKED→COMPLETED) |
-| `trust` | Exposes `trust_events` → cached score via background job |
-| `fraud` | Fraud report intake, duplicate detection, admin review |
-| `admin` | Manual onboarding, identity verification, dispute/listing resolution |
 
 ### Key Design Decisions
 
@@ -158,17 +91,21 @@ Core entities owned by the backend:
 5. **Refresh token rotation** — each use invalidates the previous token; tokens
    are stored hashed in DB so they can be revoked server-side.
 
----
+### Verification Decisions
+- Rejected Tier 1 and Tier 2 submissions can be resubmitted.
+- A rejected Tier 2 Page remains `REJECTED` and locked from publishing until corrected and resubmitted.
+- Tier 1 and Tier 2 are parallel verification tracks; page creation does not require the student checklist fields.
+- Tier 2 uses its own profile picture and does not require it to match Tier 1.
+- No automatic annual re-verification trigger is enabled in this build.
 
-## API
+## API Endpoints
 
-All endpoints are under `/api/v1/`. API documentation is available at
-`/api/v1/docs` when `ENABLE_SWAGGER=true`.
+All endpoints are under `/api/v1/`.
 
 ### Auth
-- `POST /auth/register` — Register with email + password
-- `POST /auth/verify-email` — Verify email with token
-- `POST /auth/login` — Login, get access + refresh tokens
+- `POST /auth/register` — Submit the basic Tier 1 profile for admin review; no tokens are issued until approval
+- `POST /student-profiles/signup` — Submit the same basic profile for admin review
+- `POST /auth/login` — Login after approval and receive access + refresh tokens
 - `POST /auth/refresh` — Exchange refresh token for new pair
 - `POST /auth/forgot-password` — Send password reset email
 - `POST /auth/reset-password` — Reset password with token
@@ -212,145 +149,47 @@ All endpoints are under `/api/v1/`. API documentation is available at
 - `GET /fraud/duplicates/pending` — List pending duplicate flags (admin)
 - `PATCH /fraud/duplicates/:id/resolve` — Resolve a duplicate flag (admin)
 
-### Admin
+### Student Profiles
+- `GET /student-profiles/me` — Get the current basic submission
+- `GET /student-profiles/submissions/:id` — Get a submission by review queue ID
+
+### Provider Pages
+- `GET /provider-pages/me` — Get the current provider Page
+- `POST /provider-pages` — Create a Page or replace a rejected Page
+- `PATCH /provider-pages/me` — Update a draft or rejected Page
+- `POST /provider-pages/me/submit` — Submit Tier 2 verification
+- `GET /provider-pages/admin/pending` — List pending Tier 2 Pages
+- `PATCH /provider-pages/:id/verify` — Approve a Tier 2 Page
+- `PATCH /provider-pages/:id/reject` — Reject a Tier 2 Page with a reason
+
+### Admin Review
+- `GET /admin/review-queue` — List Tier 1 and Tier 2 submissions
+- `GET /admin/review-queue/:id` — Get one submission and its submitted data
+- `POST /admin/review` — Approve or reject a submission; rejection requires a reason
 - `POST /admin/onboard` — Manually onboard agent/landlord
 - `PATCH /admin/users/:id/verify-identity` — Verify user identity
 - `GET /admin/users` — List all users
 - `GET /admin/users/:id` — Get user detail with trust events
 - `PATCH /admin/listings/:id/flag` — Flag a listing
 
----
+## Background Jobs (BullMQ)
 
-## Environment variables
-
-**`safecrib-backend/.env`**
-
-| Variable | Description |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `DIRECT_URL` | PostgreSQL connection for Prisma migrations |
-| `REDIS_URL` | Redis connection for BullMQ queues |
-| `JWT_ACCESS_SECRET` | Access token signing secret |
-| `JWT_REFRESH_SECRET` | Refresh token signing secret |
-| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | Gmail SMTP credentials for transactional emails |
-| `SMTP_FROM` | Sender email address |
-| `FRONTEND_URL_TESTING` | Frontend origin for CORS + email links |
-| `ENABLE_SWAGGER` | Enable Swagger docs (`true`/`false`) |
-| `API_NAME` | API name shown in Swagger |
-| `API_VERSION` | API version (default `1.0.0`) |
-
-**`apps/web/.env`**
-
-| Variable | Description |
-|---|---|
-| `NEXT_PUBLIC_API_URL` | Base URL for the API |
-| `NEXTAUTH_URL` | Base URL of the web app |
-| `NEXTAUTH_SECRET` | Auth.js session secret |
-| `GITHUB_ID` / `GITHUB_SECRET` | GitHub OAuth app credentials |
-| `GOOGLE_ID` / `GOOGLE_SECRET` | Google OAuth credentials |
-
-Never commit real values — `.env.example` files should list keys only.
-
----
-
-## Scripts
-
-### Backend (from `safecrib-backend/`)
-
-```bash
-npm install          # Install dependencies
-npm run start:dev    # Start API server (watch mode)
-npm run start:worker:dev  # Start BullMQ workers (separate terminal)
-npm test             # Unit tests (domain engines)
-npm run test:e2e    # End-to-end tests
-npm run lint        # Lint (oxlint)
-npx tsc --noEmit    # Typecheck
-npm run build       # Production build
-```
-
-### Frontend (from `apps/web/`)
-
-```bash
-npm install          # Install dependencies
-npm run dev          # Start dev server
-npm run build        # Production build
-npm test             # Unit tests
-npm run lint         # Lint
-```
-
----
+| Queue | Worker | Triggered By |
+|---|---|---|
+| `email` | EmailProcessor | Verification, password reset, welcome, and profile-review notifications |
+| `image-hash` | ImageHashProcessor | Photo upload |
+| `trust-recompute` | TrustRecomputeProcessor | New trust event |
+| `booking-hold-expiry` | BookingHoldExpiryProcessor | Booking enters HELD |
+| `duplicate-sweep` | DuplicateSweepProcessor | Nightly scheduled job |
 
 ## Testing
 
-- **Domain engines** (`domain/*`): exhaustive unit tests with no mocks — 56 tests covering trust scoring, duplicate detection (pHash, text similarity, geo+price), and the booking state machine.
-- **E2E tests** (`test/`): 3 tests covering registration validation, user creation, and login rejection.
-
 ```bash
-cd safecrib-backend
-npm test              # Unit tests
-npm run test:e2e      # E2e tests
+npm test              # Unit tests (domain engines)
+npm run test:e2e      # End-to-end tests
 npm run test:cov      # Coverage report
 ```
 
----
+## Swagger
 
-## Getting started
-
-### Prerequisites
-
-- Node.js 20+
-- Docker (for local Postgres + Redis)
-
-### Setup
-
-```bash
-# Start local PostgreSQL + Redis
-docker run -d --name postgres-safecrib \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=safecrib_dev \
-  -p 5432:5432 postgres:16-alpine
-
-docker run -d --name redis-safecrib -p 6379:6379 redis:7-alpine
-
-# Backend
-cd safecrib-backend
-npm install
-cp .env.example .env   # fill in JWT secrets
-npx prisma migrate dev
-npm run start:dev       # API on http://localhost:3001
-# In a separate terminal:
-npm run start:worker:dev  # BullMQ workers
-
-# Frontend
-cd ../apps/web
-npm install
-cp .env.example .env
-npm run dev             # Web app on http://localhost:3000
-```
-
----
-
-## Roadmap
-
-| Phase | Theme | Status |
-|---|---|---|
-| **v1.0** | Trust engine MVP | Backend complete — auth, listings, bookings, fraud, trust, admin |
-| **v1.1** | Web frontend | Next.js dashboard, API client, auth flow |
-| **v1.2** | Mobile experience | Progressive Web App support |
-
----
-
-## Non-functional considerations
-
-- **Auth model:** JWT access tokens (15 min, revocable) + rotated refresh tokens (7 days, stored hashed in DB). Email verification gated before listing creation.
-- **Rate limiting:** `@nestjs/throttler` on auth and fraud endpoints.
-- **Security headers:** Helmet with CSP, HSTS (production), frameguard, no-sniff.
-- **CORS:** Locked to configured frontend origins only; credentials enabled.
-- **Image safety:** pHash computed at upload via Sharp + DCT, checked against existing listings.
-- **Privacy by default:** No full source code stored. Only trust-relevant events are recorded.
-
----
-
-## License
-
-UNLICENSED
+API documentation is available at `/api/v1/docs` when `ENABLE_SWAGGER=true`.

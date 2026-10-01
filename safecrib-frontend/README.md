@@ -10,7 +10,7 @@
 
 SafeCrib is a mobile-friendly accommodation marketplace frontend for students, agents, landlords, and operations staff. It connects verified profiles and provider pages with reviewed home listings, booking actions, support conversations, and trust-stage badges.
 
-> **Repository scope:** this directory contains the Next.js frontend and Cloudflare deployment configuration. The backend project lives at `../safecrib-backend/safecrib-backend/`. The frontend treats persisted backend identity, authorization, verification, listing state, and trust state as authoritative.
+> **Repository scope:** this directory contains the Next.js frontend and Cloudflare deployment configuration. The backend project lives at `../safecrib-backend/`. The frontend treats persisted backend identity, authorization, verification, listing state, and trust state as authoritative.
 
 ## Contents
 

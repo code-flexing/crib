@@ -122,7 +122,7 @@ export class MediaService {
     purpose: MediaPurpose,
     file: Express.Multer.File,
     entityId?: string,
-  ): Promise<{ media: MediaResponse; url: string }> {
+  ): Promise<{ media: MediaResponse; url: string; expiresAt?: number }> {
     if (!file || !file.buffer) {
       throw new BadRequestException('No file provided');
     }
@@ -258,6 +258,14 @@ export class MediaService {
     dto: CompleteUploadDto,
   ): Promise<{ media: { id: string; status: 'READY' } }> {
     const media = await this.getOwnedMedia(mediaId, requesterId);
+
+    if (media.status === 'READY') {
+      if (media.assetId && dto.asset_id && media.assetId !== dto.asset_id) {
+        throw new ConflictException('Cloudinary asset does not match the completed media record');
+      }
+      return { media: { id: media.id, status: 'READY' } };
+    }
+
     const resourceType = this.resourceTypeToSdk(media.resourceType);
 
     if (dto.public_id !== media.publicId) {
@@ -280,13 +288,6 @@ export class MediaService {
       signature: dto.signature,
     })) {
       throw new BadRequestException('Invalid Cloudinary upload response signature');
-    }
-
-    if (media.status === 'READY') {
-      if (media.assetId && media.assetId !== dto.asset_id) {
-        throw new ConflictException('Cloudinary asset does not match the completed media record');
-      }
-      return { media: { id: media.id, status: 'READY' } };
     }
 
     if (media.status !== 'PENDING') {

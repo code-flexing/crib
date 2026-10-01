@@ -26,7 +26,7 @@ function makeListing(overrides: Record<string, unknown> = {}) {
 }
 
 function makeService() {
-  const transactionListing = makeListing({ status: 'SUBMITTED' });
+  const transactionListing = makeListing({ status: 'SUBMITTED' }) as any;
   const tx = {
     listing: { update: vi.fn(async () => transactionListing) },
     auditLog: { create: vi.fn(async () => ({})) },
@@ -89,7 +89,7 @@ describe('ListingsService listing media and pricing rules', () => {
     transactionListing.video = {
       mediaId: 'media_video',
       media: { id: 'media_video', durationSec: 30 },
-    };
+    } as any;
     prisma.listing.findUnique.mockResolvedValueOnce(
       makeListing({ video: { mediaId: 'media_video', media: { id: 'media_video', durationSec: 30 } } }),
     );

@@ -1,14 +1,24 @@
-const API_ORIGIN = "https://pible.onrender.com";
+function getApiOrigin(): string {
+  const configured = process.env.NEXT_PUBLIC_API_ORIGIN
+    ?? process.env.NEXT_PUBLIC_API_URL
+    ?? process.env.NEXT_PUBLIC_BACKEND_URL
+    ?? "https://safecrib.onrender.com";
+
+  return configured.replace(/\/+$/, "");
+}
 
 async function forward(request: Request, path: string[]) {
-  const target = `${API_ORIGIN}/${path.join("/")}${new URL(request.url).search}`;
+  const apiOrigin = getApiOrigin();
+  const target = new URL(path.join("/"), `${apiOrigin}/`);
+  target.search = new URL(request.url).search;
+
   const headers = new Headers();
   const authorization = request.headers.get("authorization");
   if (authorization) headers.set("authorization", authorization);
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
 
-  const response = await fetch(target, {
+  const response = await fetch(target.toString(), {
     method: request.method,
     headers,
     body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,

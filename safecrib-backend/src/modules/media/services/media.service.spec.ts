@@ -436,6 +436,23 @@ describe('MediaService', () => {
       expect(repo.markReady).not.toHaveBeenCalled();
     });
 
+    it('returns READY immediately for an already-completed record even when a stale public_id is resent', async () => {
+      const repo = makeRepo(makeMedia({
+        status: 'READY',
+        assetId: uploadResponse.asset_id,
+        publicId: 'prod/listings/photo/l1/original',
+      }));
+      const svc = makeService({ repo });
+
+      await expect(svc.completeUpload('media_1', 'user_1', {
+        ...uploadResponse,
+        public_id: 'prod/listings/photo/l1/another-uuid',
+      })).resolves.toEqual({
+        media: { id: 'media_1', status: 'READY' },
+      });
+      expect(repo.markReady).not.toHaveBeenCalled();
+    });
+
     it('looks up by SafeCrib media ID and reports a public_id mismatch without completing', async () => {
       const repo = makeRepo(makeMedia());
       const svc = makeService({ repo });

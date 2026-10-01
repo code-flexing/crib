@@ -1,7 +1,17 @@
+function getApiOrigin(): string {
+  const configured = process.env.NEXT_PUBLIC_API_ORIGIN
+    ?? process.env.NEXT_PUBLIC_API_URL
+    ?? process.env.NEXT_PUBLIC_BACKEND_URL
+    ?? "https://safecrib.onrender.com";
+
+  return configured.replace(/\/+$/, "");
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
+  const apiOrigin = getApiOrigin();
 
-  const response = await fetch("https://pible.onrender.com/api/v1/auth/login", {
+  const response = await fetch(`${apiOrigin}/api/v1/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

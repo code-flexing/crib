@@ -1,0 +1,647 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  displayName   String?   @map("display_name")
+  role          Role      @default(UNVERIFIED)
+  emailVerified Boolean   @default(false) @map("email_verified")
+  trustScore    Float?    @map("trust_score")
+  trustScoreUpdatedAt DateTime? @map("trust_score_updated_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  listings      Listing[]
+  providerPage  ProviderPage?
+  bookings      Booking[]  @relation("StudentBookings")
+  trustEvents   TrustEvent[]
+  reviewsGiven  Review[]   @relation("ReviewerReviews")
+  reviewsRecvd  Review[]   @relation("RevieweeReviews")
+  refreshTokens RefreshToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens PasswordResetToken[]
+  fraudReportsFiled FraudReport[] @relation("FraudReporter")
+  fraudReportsAssigned FraudReport[] @relation("FraudTargetUser")
+  identityVerified Boolean  @default(false) @map("identity_verified")
+  studentProfile  StudentProfile?
+  adminProfile    AdminProfile?
+  verification    UserVerification?
+  media           Media[]
+  bookmarks       Bookmark[]
+  supportConversations SupportConversation[]
+  supportMessages SupportMessage[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model UserVerification {
+  id                     String    @id @default(uuid())
+  userId                 String    @unique @map("user_id")
+  stage                  VerificationStage @default(PROFILE_VERIFIED)
+  badge                  VerificationBadge @default(GREEN_CHECK)
+  badgeColor             VerificationBadgeColor @default(green)
+  riskBlocked            Boolean   @default(false) @map("risk_blocked")
+  identityVerified       Boolean   @default(false) @map("identity_verified")
+  providerVerified       Boolean   @default(false) @map("provider_verified")
+  studentProfileApproved Boolean   @default(false) @map("student_profile_approved")
+  trustScore             Int?      @map("trust_score")
+  nextMilestone          String?   @map("next_milestone")
+  lastComputedAt         DateTime  @default(now()) @map("last_computed_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([stage])
+  @@index([riskBlocked])
+  @@map("user_verifications")
+}
+
+model StudentProfile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique @map("user_id")
+  displayName        String?
+  proofOfStudentship String?  @map("proof_of_studentship")
+  schoolOfStudy      String?  @map("school_of_study")
+  courseOfStudy      String?  @map("course_of_study")
+  level              String?
+  profilePicture     String?  @map("profile_picture")
+  dateOfBirth        DateTime? @map("date_of_birth")
+  gender             String?
+  phoneNumber        String?  @map("phone_number")
+  emergencyContact   String?  @map("emergency_contact")
+  socialLinks        Json?
+  status             ProfileStatus @default(PENDING)
+  reviewedBy         String?  @map("reviewed_by")
+  reviewNotes        String?  @map("review_notes")
+  rejectionReason    String?  @map("rejection_reason")
+  submittedAt        DateTime @default(now())
+  reviewedAt         DateTime? @map("reviewed_at")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("student_profiles")
+}
+
+model AdminProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("admin_profiles")
+}
+
+model AdminReviewQueue {
+  id                 String   @id @default(uuid())
+  email              String
+  tier               ProfileTier
+  reviewType         ReviewType
+  status             ProfileStatus @default(PENDING)
+  entityType         String?  @map("entity_type")
+  entityId           String?  @map("entity_id")
+  submittedData      Json
+  reviewNotes        String?  @map("review_notes")
+  reviewedBy         String?  @map("reviewed_by")
+  reviewedAt         DateTime? @map("reviewed_at")
+  rejectionReason    String?  @map("rejection_reason")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status])
+  @@index([tier, status])
+  @@index([entityType, entityId])
+  @@map("admin_review_queue")
+}
+
+enum Role {
+  UNVERIFIED
+  STUDENT
+  AGENT
+  LANDLORD
+  ADMIN
+}
+
+enum VerificationStage {
+  PROFILE_VERIFIED
+  AGENT_VERIFIED
+  TRUST_CROWN
+}
+
+enum VerificationBadge {
+  GREEN_CHECK
+  BLUE_SHIELD
+  GOLD_CROWN
+}
+
+enum VerificationBadgeColor {
+  green
+  blue
+  gold
+}
+
+enum ProfileStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NOT_SUBMITTED
+}
+
+enum ProfileTier {
+  STUDENT
+  LANDLORD
+}
+
+enum ReviewType {
+  SIGNUP
+  CREATE_PAGE
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
+  revoked   Boolean  @default(false)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@unique([tokenHash])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@unique([tokenHash])
+  @@map("password_reset_tokens")
+}
+
+model Listing {
+  id        String    @id @default(uuid())
+  ownerId   String    @map("owner_id")
+  providerPageId String? @map("provider_page_id")
+  title     String
+  description String?
+  price     Int
+  discountAmount Int? @map("discount_amount")
+  lat       Float
+  lng       Float
+  campus    String?
+  address   String?
+  locationReference String? @map("location_reference")
+  status    ListingStatus @default(DRAFT)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner   User           @relation(fields: [ownerId], references: [id])
+  providerPage ProviderPage? @relation(fields: [providerPageId], references: [id])
+  photos  ListingPhoto[]
+  video   ListingVideo?
+  bookings Booking[]
+  fraudReports FraudReport[]
+  bookmarks Bookmark[]
+  duplicateFlagsA DuplicateFlag[] @relation("DuplicateFlagsA")
+  duplicateFlagsB DuplicateFlag[] @relation("DuplicateFlagsB")
+
+  @@index([ownerId])
+  @@index([providerPageId])
+  @@index([status])
+  @@index([lat, lng])
+  @@map("listings")
+}
+
+enum ListingStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  ACTIVE
+  INACTIVE
+  SOLD
+  FLAGGED
+}
+
+model ProviderPage {
+  id                String @id @default(uuid())
+  ownerId           String @unique @map("owner_id")
+  displayName       String @map("display_name")
+  description       String?
+  phone             String?
+  verificationState ProviderVerificationState @default(DRAFT) @map("verification_state")
+  submittedAt       DateTime? @map("submitted_at")
+  verifiedAt        DateTime? @map("verified_at")
+  verifiedBy        String? @map("verified_by")
+  verificationNotes String? @map("verification_notes")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  proofOfLicense    String?  @map("proof_of_license")
+  profilePicture    String?  @map("profile_picture")
+  payoutAccounts    Json?
+  providerType      String?  @map("provider_type")
+  accountModeConversionConsented Boolean @default(false) @map("account_mode_conversion_consented")
+  businessName      String?  @map("business_name")
+  businessRegNumber String   @unique @map("business_reg_number")
+  businessAddress   String?  @map("business_address")
+  additionalContacts Json?  @map("additional_contacts")
+  socialLinks       Json?
+
+  owner    User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  listings Listing[]
+
+  @@index([verificationState])
+  @@map("provider_pages")
+}
+
+enum ProviderVerificationState {
+  DRAFT
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+model AuditLog {
+  id         String @id @default(uuid())
+  actorId    String? @map("actor_id")
+  action     String
+  entityType String @map("entity_type")
+  entityId   String @map("entity_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+model SupportConversation {
+  id            String          @id @default(uuid())
+  userId        String          @map("user_id")
+  status        SupportStatus   @default(OPEN)
+  subject       String?
+  lastMessageAt DateTime        @default(now()) @map("last_message_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportMessage[]
+
+  @@index([status, lastMessageAt])
+  @@index([userId, status])
+  @@map("support_conversations")
+}
+
+model SupportMessage {
+  id             String              @id @default(uuid())
+  conversationId String              @map("conversation_id")
+  senderId       String              @map("sender_id")
+  senderRole     SupportSenderRole   @map("sender_role")
+  body           String
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  conversation SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User                @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@map("support_messages")
+}
+
+enum SupportStatus {
+  OPEN
+  RESOLVED
+}
+
+enum SupportSenderRole {
+  USER
+  ADMIN
+}
+
+model ListingPhoto {
+  id        String   @id @default(uuid())
+  listingId String   @map("listing_id")
+  mediaId   String?  @unique @map("media_id")
+  url       String
+  phash     String   @map("phash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  media   Media?  @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+
+  @@index([listingId])
+  @@index([phash])
+  @@map("listing_photos")
+}
+
+model ListingVideo {
+  id        String   @id @default(uuid())
+  listingId String   @unique @map("listing_id")
+  mediaId   String   @unique @map("media_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  media   Media   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@map("listing_videos")
+}
+
+model Bookmark {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  listingId String   @map("listing_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@index([userId, createdAt])
+  @@map("bookmarks")
+}
+
+model Booking {
+  id            String         @id @default(uuid())
+  listingId     String         @map("listing_id")
+  studentId     String         @map("student_id")
+  status        BookingStatus  @default(HELD)
+  depositAmount Int            @map("deposit_amount")
+  holdExpiresAt DateTime?      @map("hold_expires_at")
+  bookedAt      DateTime?      @map("booked_at")
+  completedAt   DateTime?      @map("completed_at")
+  cancelledAt   DateTime?      @map("cancelled_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  listing  Listing @relation(fields: [listingId], references: [id])
+  student  User    @relation("StudentBookings", fields: [studentId], references: [id])
+  review   Review?
+
+  @@index([listingId])
+  @@index([studentId])
+  @@index([status])
+  @@map("bookings")
+}
+
+enum BookingStatus {
+  HELD
+  BOOKED
+  CANCELLED
+  COMPLETED
+  DISPUTED
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  bookingId   String   @unique @map("booking_id")
+  reviewerId  String   @map("reviewer_id")
+  revieweeId  String   @map("reviewee_id")
+  rating      Int
+  text        String?
+  status      ReviewStatus @default(PENDING)
+  moderatedAt DateTime? @map("moderated_at")
+  moderatedBy String? @map("moderated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  booking  Booking @relation(fields: [bookingId], references: [id])
+  reviewer User    @relation("ReviewerReviews", fields: [reviewerId], references: [id])
+  reviewee User    @relation("RevieweeReviews", fields: [revieweeId], references: [id])
+
+  @@index([revieweeId])
+  @@index([reviewerId])
+  @@map("reviews")
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  HIDDEN
+}
+
+model TrustEvent {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  eventType   String   @map("event_type")
+  weight      Float
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+  payload     Json?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([occurredAt])
+  @@map("trust_events")
+}
+
+model FraudReport {
+  id          String   @id @default(uuid())
+  reporterId  String   @map("reporter_id")
+  targetUserId String? @map("target_user_id")
+  targetListingId String? @map("target_listing_id")
+  type        FraudReportType
+  description String
+  status      FraudReportStatus @default(PENDING)
+  resolution  String?
+  resolvedBy  String? @map("resolved_by")
+  resolvedAt  DateTime? @map("resolved_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  reporter  User?     @relation("FraudReporter", fields: [reporterId], references: [id])
+  targetUser User?     @relation("FraudTargetUser", fields: [targetUserId], references: [id])
+  targetListing Listing? @relation(fields: [targetListingId], references: [id])
+
+  @@index([status])
+  @@index([targetUserId])
+  @@index([targetListingId])
+  @@map("fraud_reports")
+}
+
+enum FraudReportType {
+  FAKE_LISTING
+  MISREPRESENTED
+  DOUBLE_BOOKING
+  SCAM_AGENT
+  OTHER
+}
+
+enum FraudReportStatus {
+  PENDING
+  CONFIRMED
+  DISMISSED
+}
+
+model DuplicateFlag {
+  id          String       @id @default(uuid())
+  listingIdA  String       @map("listing_id_a")
+  listingIdB  String       @map("listing_id_b")
+  matchType   DuplicateMatchType
+  similarity  Float
+  status      DuplicateFlagStatus @default(PENDING)
+  reviewedBy  String? @map("reviewed_by")
+  reviewedAt  DateTime? @map("reviewed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  listingA Listing @relation("DuplicateFlagsA", fields: [listingIdA], references: [id])
+  listingB Listing @relation("DuplicateFlagsB", fields: [listingIdB], references: [id])
+
+  @@unique([listingIdA, listingIdB, matchType])
+  @@index([status])
+  @@map("duplicate_flags")
+}
+
+enum DuplicateMatchType {
+  IMAGE_PHASH
+  TEXT_SIMILARITY
+  GEO_PRICE
+}
+
+enum DuplicateFlagStatus {
+  PENDING
+  CONFIRMED
+  DISMISSED
+}
+
+// ─── Media ────────────────────────────────────────────────────────────────────
+
+enum MediaPurpose {
+  AVATAR
+  COVER_PHOTO
+  LISTING_PHOTO
+  LISTING_VIDEO
+  PROVIDER_LOGO
+  STUDENT_ID
+  PROOF_OF_STUDENTSHIP
+  PROOF_OF_LICENSE
+  CONTRACT_DOCUMENT
+}
+
+enum MediaResourceType {
+  IMAGE
+  VIDEO
+  RAW
+}
+
+enum MediaDeliveryType {
+  UPLOAD      // public CDN
+  AUTHENTICATED // signed-URL protected
+  PRIVATE     // fully private, signed-URL only
+}
+
+enum MediaStatus {
+  PENDING
+  READY
+  FAILED
+  DELETING
+  DELETED
+}
+
+model Media {
+  id           String            @id @default(uuid())
+  ownerId      String            @map("owner_id")
+  purpose      MediaPurpose
+  resourceType MediaResourceType @map("resource_type")
+  deliveryType MediaDeliveryType @map("delivery_type")
+
+  // Cloudinary references – never store a full URL
+  publicId     String            @unique @map("public_id")
+  assetId      String?           @map("asset_id")
+  version      BigInt?
+  format       String?
+  bytes        Int?
+  width        Int?
+  height       Int?
+  durationSec  Float?            @map("duration_sec")
+  etag         String?
+
+  status        MediaStatus @default(PENDING)
+  failureReason String?     @map("failure_reason")
+
+  // idempotency key for webhook deduplication: assetId + version (set once READY)
+  idempotencyKey String?    @unique @map("idempotency_key")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  readyAt   DateTime? @map("ready_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  owner       User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  attachments MediaAttachment[]
+  listingPhoto ListingPhoto?
+  listingVideo ListingVideo?
+
+  @@index([ownerId, purpose])
+  @@index([status, createdAt])
+  @@map("media")
+}
+
+// Polymorphic join: one Media can be attached to many entities (listing, profile, etc.)
+model MediaAttachment {
+  id         String @id @default(uuid())
+  mediaId    String @map("media_id")
+  entityType String @map("entity_type") // "listing" | "user" | "provider_page" etc.
+  entityId   String @map("entity_id")
+  role       String // "photo" | "avatar" | "document" | "video"
+  position   Int    @default(0) // ordering within a role
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([mediaId, entityType, entityId, role])
+  @@index([entityType, entityId, role, position])
+  @@map("media_attachments")
+}
+
+// Access-log for sensitive media (delivery type PRIVATE / AUTHENTICATED)
+model MediaAccessLog {
+  id        String   @id @default(uuid())
+  mediaId   String   @map("media_id")
+  accessorId String  @map("accessor_id")
+  ip        String?
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([mediaId])
+  @@index([accessorId])
+  @@map("media_access_logs")
+}
+
+// Relation back-reference on User
+// (we need to extend the User model to include the media relation)

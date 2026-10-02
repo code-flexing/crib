@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import type {
   ProfileStatus,
@@ -67,6 +68,16 @@ export class StudentProfileService {
     };
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const providerPage = await tx.providerPage.findUnique({
+        where: { ownerId: userId },
+        select: { verificationState: true },
+      });
+      if (providerPage?.verificationState === 'SUBMITTED') {
+        throw new ConflictException(
+          'Your provider Page is under review. Wait for its decision before submitting a student profile.',
+        );
+      }
+
       const profile = existing
         ? await tx.studentProfile.update({
             where: { id: existing.id },
@@ -136,7 +147,7 @@ export class StudentProfileService {
       });
 
       return { profile, queue };
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     this.logger.log(`Student profile submitted for ${user.email}`);
     return this.toRecord(result.profile, result.queue);

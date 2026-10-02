@@ -118,9 +118,11 @@ export default function NewProviderPage() {
     ]).then(async ([user, providerPage, pendingUploads]) => {
       setUser(user);
       const role = String(user.role ?? "").toUpperCase();
-      if (role === "STUDENT") {
+      if (["STUDENT", "UNVERIFIED"].includes(role)) {
         const profileStatus = await apiFetch<unknown>("/api/v1/student-profiles/status").then(unwrapData<unknown>);
-        setStudentStatus(normalizeAccountStatus(profileStatus));
+        const accountStatus = normalizeAccountStatus(profileStatus);
+        setStudentStatus(accountStatus);
+        if (accountStatus === "pending") { router.replace("/page"); return; }
       }
       const rawStatus = String(providerPage?.status ?? "NONE").toUpperCase();
       setStatus(rawStatus);
@@ -372,6 +374,10 @@ export default function NewProviderPage() {
   };
 
   const submit = async (confirmedConversion = false) => {
+    if (studentStatus === "pending") {
+      router.replace("/page");
+      return;
+    }
     const invalidStep = [1, 2, 3].find((target) => validateStep(target));
     if (invalidStep) {
       setError(validateStep(invalidStep));

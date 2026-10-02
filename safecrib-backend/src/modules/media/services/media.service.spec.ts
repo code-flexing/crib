@@ -5,9 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { MediaService } from './media.service.js';
+import { MediaPolicyService } from './media-policy.service.js';
 import type { StorageProvider, UploadSignatureResult } from '../providers/storage-provider.interface.js';
 import type { MediaRepository } from '../media.repository.js';
-import type { MediaPolicyService } from './media-policy.service.js';
 import type { MediaPathBuilder } from './media-path-builder.service.js';
 import type { Queue } from 'bullmq';
 import type { Media } from '@prisma/client';
@@ -527,6 +527,35 @@ describe('MediaService', () => {
       expect(result.expiresAt).toBeDefined();
       expect(repo.logAccess).toHaveBeenCalledWith(
         expect.objectContaining({ mediaId: 'media_1', accessorId: 'user_1' }),
+      );
+    });
+
+    it('allows an admin to open a ready private proof-of-license asset', async () => {
+      const media = makeMedia({
+        status: 'READY',
+        purpose: 'PROOF_OF_LICENSE',
+        deliveryType: 'PRIVATE',
+      });
+      const repo = makeRepo(media);
+      const storage = makeStorage();
+      const svc = makeService({
+        repo,
+        storage,
+        policy: new MediaPolicyService(repo),
+      });
+
+      const result = await svc.getAccessUrl(
+        'media_1',
+        'admin_1',
+        'ADMIN',
+        '127.0.0.1',
+        'admin-test',
+      );
+
+      expect(result.url).toContain('cloudinary.com');
+      expect(storage.getSignedUrl).toHaveBeenCalled();
+      expect(repo.logAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ mediaId: 'media_1', accessorId: 'admin_1' }),
       );
     });
 

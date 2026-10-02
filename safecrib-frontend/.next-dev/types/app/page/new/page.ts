@@ -1,4 +1,4 @@
-// File: /workspaces/crib/src/app/page/new/page.tsx
+// File: /workspaces/crib/safecrib-frontend/src/app/page/new/page.tsx
 import * as entry from '../../../../../src/app/page/new/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

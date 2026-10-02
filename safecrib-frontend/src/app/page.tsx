@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type MouseEvent, type ReactNode } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
+import { PageLoader } from "@/components/loading/PageLoader";
 import { NotificationForm } from "@/components/notifications/NotificationForm";
 import { InstallButton } from "@/components/pwa/InstallButton";
+import { getCurrentUser } from "@/lib/api";
 
 const problems = [
   { title: "Fake listings", text: "Not every property is what it appears to be online." },
@@ -136,13 +138,40 @@ function RouteLink({
 }
 
 export default function Home() {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const accountHref = isAuthenticated ? "/dashboard" : "/signup";
   const accountCta = isAuthenticated ? "Go to dashboard" : "Get Started";
 
+  const [sessionChecked, setSessionChecked] = useState(false);
   useEffect(() => {
-    setIsAuthenticated(Boolean(window.localStorage.getItem("safecrib_access_token")));
+    const hasSession = Boolean(
+      window.localStorage.getItem("safecrib_access_token") ||
+      window.localStorage.getItem("safecrib_refresh_token"),
+    );
+    if (!hasSession) {
+      setSessionChecked(true);
+      return;
+    }
+
+    let active = true;
+    void getCurrentUser<unknown>()
+      .then(() => {
+        if (!active) return;
+        setIsAuthenticated(true);
+        router.replace("/dashboard");
+      })
+      .catch(() => {
+        if (active) setSessionChecked(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  useEffect(() => {
 
     const elements = document.querySelectorAll("[data-reveal]");
 
@@ -166,6 +195,8 @@ export default function Home() {
   }, []);
 
   const handleNavigate = () => setMenuOpen(false);
+
+  if (!sessionChecked) return <PageLoader label="Checking your session" />;
 
   return (
     <main className="flex min-h-screen w-full flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">

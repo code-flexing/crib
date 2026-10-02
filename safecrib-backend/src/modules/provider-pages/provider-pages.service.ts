@@ -9,6 +9,7 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import { EMAIL_QUEUE } from '../../infra/queue/queue.constants.js';
 import { TrustService } from '../trust/trust.service.js';
@@ -50,7 +51,7 @@ export class ProviderPagesService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-
+    await this.assertNoPendingStudentProfile(ownerId);
     if (!['UNVERIFIED', 'STUDENT', 'AGENT', 'LANDLORD'].includes(user.role)) {
       throw new ForbiddenException('Only basic or provider accounts can create a Page');
     }
@@ -118,6 +119,7 @@ export class ProviderPagesService {
       || page.accountModeConversionConsented;
     if (owner?.role === 'STUDENT' && !conversionConsent) {
       throw new ConflictException('Confirm account conversion before updating this provider Page');
+    await this.assertNoPendingStudentProfile(ownerId);
     }
 
     const current = {
@@ -171,6 +173,16 @@ export class ProviderPagesService {
 
     const reviewId = randomUUID();
     const updated = await this.prisma.$transaction(async (tx) => {
+      const studentProfile = await tx.studentProfile.findUnique({
+        where: { userId: ownerId },
+        select: { status: true },
+      });
+      if (studentProfile?.status === 'PENDING') {
+        throw new ConflictException(
+          'Your student profile is under review. Wait for its decision before submitting a provider Page.',
+        );
+      }
+
       const result = await tx.providerPage.update({
         where: { id: page.id },
         data: {
@@ -203,7 +215,7 @@ export class ProviderPagesService {
         },
       });
       return result;
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return { ...updated, reviewQueueId: reviewId };
   }
@@ -384,6 +396,15 @@ export class ProviderPagesService {
     const page = await this.getMine(ownerId);
     if (!page) throw new NotFoundException('Create a provider Page before submitting for verification');
     return page;
+  }
+
+  private async assertNoPendingStudentProfile(ownerId: string) {
+    const profile = await this.studentProfiles.getProfileStatus(ownerId);
+    if (profile.status === 'PENDING') {
+      throw new ConflictException(
+        'Your student profile is under review. Wait for its decision before submitting a provider Page.',
+      );
+    }
   }
 
   private toPageData(dto: CreateProviderPageDto | UpdateProviderPageDto) {

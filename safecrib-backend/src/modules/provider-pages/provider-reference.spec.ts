@@ -20,7 +20,11 @@ const createDto = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 }) as CreateProviderPageDto;
 
-function createService(role: string) {
+function createService(
+  role: string,
+  studentStatus = 'NOT_SUBMITTED',
+  existingPage: Record<string, unknown> | null = null,
+) {
   const prisma = {
     user: {
       findUnique: vi.fn().mockResolvedValue({
@@ -31,18 +35,33 @@ function createService(role: string) {
       }),
     },
     providerPage: {
-      findUnique: vi.fn().mockResolvedValue(null),
+      findUnique: vi.fn().mockResolvedValue(existingPage),
       create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'page-id', ...data })),
+      update: vi.fn(),
     },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
+  };
+  const tx = {
+    studentProfile: {
+      findUnique: vi.fn().mockResolvedValue({ status: studentStatus }),
+    },
+    providerPage: { update: vi.fn().mockResolvedValue({ id: 'page-id' }) },
+    adminReviewQueue: { create: vi.fn().mockResolvedValue({}) },
+    auditLog: { create: vi.fn().mockResolvedValue({}) },
+  };
+  Object.assign(prisma, {
+    $transaction: vi.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)),
+  });
+  const studentProfiles = {
+    getProfileStatus: vi.fn().mockResolvedValue({ status: studentStatus, profile: null }),
   };
   const service = new ProviderPagesService(
     prisma as unknown as PrismaService,
     {} as TrustService,
-    {} as StudentProfileService,
+    studentProfiles as unknown as StudentProfileService,
     {} as Queue,
   );
-  return { prisma, service };
+  return { prisma, service, tx };
 }
 
 describe('generateBusinessReference', () => {
@@ -60,6 +79,33 @@ describe('ProviderPagesService.create', () => {
 
     await expect(service.create('user-id', createDto())).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.providerPage.create).not.toHaveBeenCalled();
+  });
+
+  it('blocks provider Page creation while a student profile is pending review', async () => {
+    const { prisma, service } = createService('STUDENT', 'PENDING');
+
+    await expect(
+      service.create('user-id', createDto({ switchAccountToProvider: true })),
+    ).rejects.toThrow('student profile is under review');
+    expect(prisma.providerPage.create).not.toHaveBeenCalled();
+  });
+
+  it('blocks an existing provider draft from submission while a student profile is pending', async () => {
+    const { service, tx } = createService('STUDENT', 'PENDING', {
+      id: 'page-id',
+      ownerId: 'user-id',
+      verificationState: 'DRAFT',
+      accountModeConversionConsented: true,
+      displayName: 'Amina Homes',
+      proofOfLicense: 'private-license-media-id',
+      profilePicture: 'profile-media-id',
+      payoutAccounts: [{ provider: 'Bank', accountName: 'Amina Homes', accountNumber: '0123456789' }],
+    });
+
+    await expect(service.submit('user-id')).rejects.toThrow(
+      'student profile is under review',
+    );
+    expect(tx.providerPage.update).not.toHaveBeenCalled();
   });
 
   it('ignores any client reference and generates one for an unverified account', async () => {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { Button } from "@/components/ui/Button";
+import { ReviewPendingState } from "@/components/verification/ReviewPendingState";
 import {
   readDraft,
   removeDraft,
@@ -864,6 +865,21 @@ export default function CompleteStudentProfilePage() {
 
   const isPending = status === "pending";
   const isRejected = status === "rejected";
+  const providerPagePending = pageStatus === "pending";
+
+  if (isPending || providerPagePending) {
+    return (
+      <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
+        <DashboardNav onCreatePage={openPage} pageStatus={pageStatus} />
+        <section className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8">
+          <BackHomeLink />
+          <ReviewPendingState
+            subject={providerPagePending ? "provider Page" : "student profile"}
+          />
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
@@ -901,14 +917,6 @@ export default function CompleteStudentProfilePage() {
               Discard draft
             </Button>
           </div>
-        )}
-
-        {status === "pending" && (
-          <p className="mt-6 rounded-[4px] border border-black/10 bg-white p-4 text-sm text-black/65">
-            Your profile is under review.
-            You can update it after a
-            decision.
-          </p>
         )}
 
         {status === "rejected" && (

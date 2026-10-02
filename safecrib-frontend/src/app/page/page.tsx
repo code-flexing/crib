@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { PageLoader } from "@/components/loading/PageLoader";
 import { Button } from "@/components/ui/Button";
-import { ApiError, apiFetch, displayName, normalizePageStatus, unwrapData, type PageStatus } from "@/lib/api";
+import { ReviewPendingState } from "@/components/verification/ReviewPendingState";
+import { ApiError, apiFetch, displayName, getCurrentUser, normalizeAccountStatus, normalizePageStatus, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
 
 type ProviderPageData = { id?: string; displayName?: string; status?: string; verificationNotes?: string; rejectionReason?: string; reason?: string } | null;
 type ListingPhoto = string | { url?: string; mediaId?: string };
@@ -26,6 +27,7 @@ export default function ProviderWorkspacePage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [providerPage, setProviderPage] = useState<ProviderPageData>(null);
+  const [studentStatus, setStudentStatus] = useState<AccountStatus>("not_submitted");
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -37,7 +39,7 @@ export default function ProviderWorkspacePage() {
     }
 
     void Promise.all([
-      apiFetch<unknown>("/api/v1/users/me").then((result) => unwrapData<User>(result)),
+      getCurrentUser<User>(),
       apiFetch<unknown>("/api/v1/provider-pages/me").then((result) => unwrapData<ProviderPageData>(result)).catch((loadError: unknown) => {
         if (loadError instanceof ApiError && loadError.status === 404) return null;
         throw loadError;
@@ -45,8 +47,23 @@ export default function ProviderWorkspacePage() {
     ]).then(async ([currentUser, page]) => {
       setUser(currentUser);
       setProviderPage(page);
+      const role = String(currentUser.role ?? "").toUpperCase();
+      let currentStudentStatus: AccountStatus = "not_submitted";
+      if (["UNVERIFIED", "STUDENT"].includes(role)) {
+        const statusResponse = unwrapData<unknown>(
+          await apiFetch<unknown>("/api/v1/student-profiles/status"),
+        );
+        const status = normalizeAccountStatus(statusResponse);
+        currentStudentStatus = status;
+        setStudentStatus(status);
+        if (status === "pending") return;
+      }
       if (!page) {
-        router.replace("/page/new");
+        const requiresStudentProfile = ["UNVERIFIED", "STUDENT"].includes(role)
+          && currentStudentStatus === "not_submitted";
+        router.replace(requiresStudentProfile
+          ? "/profile/complete?reason=provider-workspace"
+          : "/page/new");
         return;
       }
       if (String(page.status ?? "").toUpperCase() === "VERIFIED") {
@@ -72,30 +89,35 @@ export default function ProviderWorkspacePage() {
     return result;
   }, {});
 
-  if (loading) return <PageLoader label="Loading provider workspace" />;
+  const missingStudentProfile = !providerPage
+    && ["UNVERIFIED", "STUDENT"].includes(String(user?.role ?? "").toUpperCase())
+    && studentStatus === "not_submitted";
+  if (loading || missingStudentProfile) return <PageLoader label={missingStudentProfile ? "Taking you to profile setup" : "Loading provider workspace"} />;
 
   const providerRole = ["AGENT", "LANDLORD"].includes(String(user?.role ?? "").toUpperCase());
+  const studentReviewPending = studentStatus === "pending";
+  const providerReviewPending = ["SUBMITTED", "UNDER_REVIEW", "PENDING"].includes(rawPageStatus);
   const hasProviderPage = Boolean(providerPage && (providerPage.id || providerPage.status || providerPage.displayName));
   const canAccessProviderWorkspace = hasProviderPage || providerRole || rawPageStatus !== "NONE";
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
-      <DashboardNav onCreatePage={() => router.push(setupAvailable ? "/page/new" : "/page")} pageStatus={pageStatus} canManagePage={canAccessProviderWorkspace} />
+      <DashboardNav onCreatePage={() => router.push(setupAvailable && !studentReviewPending ? "/page/new" : "/page")} pageStatus={pageStatus} canManagePage={canAccessProviderWorkspace && !studentReviewPending} />
       <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8">
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Provider workspace</p>
-            <h1 className="mt-2 text-3xl font-medium text-safecrib-black">{providerPage?.displayName || displayName(user?.displayName) || "Manage your homes"}</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-black/60">Manage your provider verification and accommodation listings from one place.</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">{studentReviewPending ? "Account review" : "Provider workspace"}</p>
+            <h1 className="mt-2 text-3xl font-medium text-safecrib-black">{studentReviewPending ? "Your profile is awaiting approval" : providerPage?.displayName || displayName(user?.displayName) || "Manage your homes"}</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-black/60">{studentReviewPending ? "Your student profile is with the SafeCrib review team." : "Manage your provider verification and accommodation listings from one place."}</p>
           </div>
           {verified && <Link href="/page/homes/new"><Button type="button">+ Create a home</Button></Link>}
         </div>
 
         {error && <div className="mt-7 border-l-4 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert"><p>{error}</p><button type="button" onClick={() => window.location.reload()} className="mt-2 font-medium underline">Reload workspace</button></div>}
 
-        {!canAccessProviderWorkspace && <div className="mt-7 border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"><p className="font-medium">Create your provider Page first</p><p className="mt-1 leading-6">This workspace unlocks after you create an agent or landlord Page. The Page is the access gate, not the student role.</p><div className="mt-4 flex flex-wrap gap-3"><Link href="/page/new" className="inline-block font-medium underline">Create provider Page</Link><Link href="/dashboard" className="inline-block font-medium underline">Return to dashboard</Link></div></div>}
+        {studentReviewPending ? <ReviewPendingState subject="student profile" /> : providerReviewPending ? <ReviewPendingState subject="provider Page" /> : !canAccessProviderWorkspace && <div className="mt-7 border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"><p className="font-medium">Create your provider Page first</p><p className="mt-1 leading-6">This workspace unlocks after you create an agent or landlord Page. The Page is the access gate, not the student role.</p><div className="mt-4 flex flex-wrap gap-3"><Link href="/page/new" className="inline-block font-medium underline">Create provider Page</Link><Link href="/dashboard" className="inline-block font-medium underline">Return to dashboard</Link></div></div>}
 
-        {canAccessProviderWorkspace && <>
+        {canAccessProviderWorkspace && !studentReviewPending && !providerReviewPending && <>
           <section aria-labelledby="verification-heading" className="mt-8 border border-black/10 bg-white p-5 sm:p-6">
             <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
               <div>

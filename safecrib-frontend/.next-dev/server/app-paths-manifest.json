@@ -1,7 +1,6 @@
 {
   "/api/backend/[...path]/route": "app/api/backend/[...path]/route.js",
-  "/manifest.webmanifest/route": "app/manifest.webmanifest/route.js",
   "/page": "app/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/page/page": "app/page/page.js"
+  "/admin/reviews/[id]/page": "app/admin/reviews/[id]/page.js"
 }

@@ -530,18 +530,29 @@ export async function resolveMediaUrl(reference: unknown): Promise<string | null
   return null;
 }
 
-export async function resolveAdminMediaUrl(reference: unknown): Promise<string | null> {
-  if (typeof reference !== "string" || !reference) return null;
-  if (/^(https?:|data:|blob:)/.test(reference)) return reference;
+export async function resolveAdminMediaUrl(reference: unknown): Promise<{ url: string | null; error: string | null }> {
+  if (typeof reference !== "string" || !reference) {
+    return { url: null, error: "No media reference was submitted." };
+  }
+  if (/^(https?:|data:|blob:)/.test(reference)) return { url: reference, error: null };
   try {
     const response = unwrapData<unknown>(await adminFetch<unknown>(`/api/v1/media/${encodeURIComponent(reference)}/access`));
-    if (typeof response === "string") return response;
+    if (typeof response === "string") return { url: response, error: null };
     if (typeof response === "object" && response !== null) {
       const mediaResponse = response as Record<string, unknown>;
-      for (const key of ["url", "accessUrl", "deliveryUrl"]) if (typeof mediaResponse[key] === "string") return mediaResponse[key];
+      for (const key of ["url", "accessUrl", "deliveryUrl"]) {
+        if (typeof mediaResponse[key] === "string") {
+          return { url: mediaResponse[key] as string, error: null };
+        }
+      }
     }
-  } catch { return null; }
-  return null;
+    return { url: null, error: "The media service returned no delivery URL." };
+  } catch (error) {
+    return {
+      url: null,
+      error: error instanceof Error ? error.message : "Media could not be opened.",
+    };
+  }
 }
 
 export function normalizeAccountStatus(value: unknown): AccountStatus {

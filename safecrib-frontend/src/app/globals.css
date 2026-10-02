@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 :root {
+  --font-manrope: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-dm-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-caveat: "Comic Sans MS", "Segoe Print", cursive;
   --safecrib-black: #0b0c0e;
   --safecrib-green: #0c7355;
   --safecrib-white: #ffffff;

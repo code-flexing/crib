@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { Caveat, DM_Sans, Manrope } from "next/font/google";
 import { Suspense } from "react";
 import { NetworkMonitor } from "@/components/network/NetworkMonitor";
 import { InitialPageLoader } from "@/components/loading/InitialPageLoader";
@@ -8,27 +7,6 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
-
-const manrope = Manrope({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-  variable: "--font-manrope",
-  display: "swap",
-});
-
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-dm-sans",
-  display: "swap",
-});
-
-const caveat = Caveat({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-caveat",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "SafeCrib",
@@ -50,8 +28,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${manrope.variable} ${dmSans.variable} ${caveat.variable}`}>
-      <body className={`${dmSans.className} safecrib-theme-frame bg-safecrib-white font-sans text-safecrib-black antialiased`}>
+    <html lang="en">
+      <body className="safecrib-theme-frame bg-safecrib-white font-sans text-safecrib-black antialiased">
         <Suspense fallback={null}>
           <InitialPageLoader />
         </Suspense>

@@ -1,5 +1,4 @@
 {
-  "/api/backend/[...path]/route": "app/api/backend/[...path]/route.js",
   "/dashboard/page": "app/dashboard/page.js",
   "/profile/page": "app/profile/page.js",
   "/page/new/page": "app/page/new/page.js",

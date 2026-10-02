@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { ListingsService } from './listings.service.js';
 
+type ListingVideoMock = {
+  mediaId: string;
+  media: { id: string; durationSec: number };
+};
+
 function makeListing(overrides: Record<string, unknown> = {}) {
   return {
     id: 'listing_1',
@@ -19,14 +24,16 @@ function makeListing(overrides: Record<string, unknown> = {}) {
     createdAt: new Date(),
     updatedAt: new Date(),
     photos: [],
-    video: null,
+    video: null as ListingVideoMock | null,
     bookings: [],
     ...overrides,
   };
 }
 
+type ListingMock = ReturnType<typeof makeListing>;
+
 function makeService() {
-  const transactionListing = makeListing({ status: 'SUBMITTED' }) as any;
+  const transactionListing: ListingMock = makeListing({ status: 'SUBMITTED' });
   const tx = {
     listing: { update: vi.fn(async () => transactionListing) },
     auditLog: { create: vi.fn(async () => ({})) },
@@ -89,8 +96,9 @@ describe('ListingsService listing media and pricing rules', () => {
     transactionListing.video = {
       mediaId: 'media_video',
       media: { id: 'media_video', durationSec: 30 },
-    } as any;
+    };
     prisma.listing.findUnique.mockResolvedValueOnce(
+      
       makeListing({ video: { mediaId: 'media_video', media: { id: 'media_video', durationSec: 30 } } }),
     );
 

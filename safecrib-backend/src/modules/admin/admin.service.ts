@@ -392,6 +392,16 @@ export class AdminService {
       newStatus === 'REJECTED' ? reason ?? 'No reason provided' : undefined,
     );
 
+    if (newStatus === 'APPROVED' && approvedUserId) {
+      try {
+        await this.trustService.getVerificationStage(approvedUserId);
+      } catch (error) {
+        this.logger.error(
+          `Unable to update verification badge after approval for ${submission.email}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
     return {
       id: submissionId,
       status: newStatus,

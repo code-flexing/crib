@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Patch,
   Post,
 } from '@nestjs/common';
@@ -23,7 +24,7 @@ export class UsersController {
   constructor(private readonly userService: UserService) {}
 
   @Get('me')
-  @Roles('STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
+  @Roles('UNVERIFIED', 'STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({ status: 200, type: UserResponseDto })
   @ApiResponse({ status: 401, description: 'Not authenticated' })
@@ -31,8 +32,17 @@ export class UsersController {
     return this.userService.getProfile(user.id);
   }
 
+  @Get(':id/public-profile')
+  @Roles('UNVERIFIED', 'STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
+  @ApiOperation({ summary: 'Get a safe, public profile for a verified account' })
+  @ApiResponse({ status: 200, description: 'Public profile and verified provider listings' })
+  @ApiResponse({ status: 404, description: 'Public profile is unavailable' })
+  getPublicProfile(@Param('id') id: string) {
+    return this.userService.getPublicProfile(id);
+  }
+
   @Patch('me')
-  @Roles('STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
+  @Roles('UNVERIFIED', 'STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
   @ApiOperation({ summary: 'Update current user profile' })
   @ApiResponse({ status: 200, type: UserResponseDto })
   @ApiResponse({ status: 401, description: 'Not authenticated' })
@@ -41,7 +51,7 @@ export class UsersController {
   }
 
   @Post('me/change-password')
-  @Roles('STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
+  @Roles('UNVERIFIED', 'STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
   @ApiOperation({ summary: 'Change current user password' })
   @ApiResponse({ status: 200, description: 'Password changed' })
   @ApiResponse({ status: 401, description: 'Not authenticated' })

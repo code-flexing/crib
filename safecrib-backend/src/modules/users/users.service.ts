@@ -21,6 +21,7 @@ export class UserService {
         id: true,
         email: true,
         displayName: true,
+        profilePicture: true,
         role: true,
         emailVerified: true,
         identityVerified: true,
@@ -82,11 +83,13 @@ export class UserService {
       where: { id: userId },
       data: {
         displayName: dto.displayName ?? undefined,
+        profilePicture: dto.profilePicture ?? undefined,
       },
       select: {
         id: true,
         email: true,
         displayName: true,
+        profilePicture: true,
         role: true,
         emailVerified: true,
         identityVerified: true,
@@ -94,6 +97,84 @@ export class UserService {
         createdAt: true,
       },
     });
+  }
+
+  async getPublicProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        displayName: true,
+        profilePicture: true,
+        role: true,
+        identityVerified: true,
+        createdAt: true,
+        studentProfile: {
+          select: { status: true, profilePicture: true },
+        },
+        providerPage: {
+          select: {
+            displayName: true,
+            description: true,
+            providerType: true,
+            businessName: true,
+            profilePicture: true,
+            verificationState: true,
+            verifiedAt: true,
+            socialLinks: true,
+            listings: {
+              where: { status: { in: ['VERIFIED', 'ACTIVE'] } },
+              orderBy: { createdAt: 'desc' },
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                price: true,
+                discountAmount: true,
+                campus: true,
+                address: true,
+                createdAt: true,
+                photos: { select: { id: true, url: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) throw new NotFoundException('Public profile unavailable');
+    const providerVerified =
+      ['AGENT', 'LANDLORD'].includes(user.role) &&
+      user.providerPage?.verificationState === 'VERIFIED';
+    const studentVerified =
+      user.role === 'STUDENT' && user.studentProfile?.status === 'APPROVED';
+    if (!providerVerified && !studentVerified) {
+      throw new NotFoundException('Public profile unavailable');
+    }
+
+    const providerPage = providerVerified ? user.providerPage : null;
+    return {
+      id: user.id,
+      displayName: providerPage?.displayName ?? user.displayName,
+      role: user.role,
+      createdAt: user.createdAt,
+      identityVerified: user.identityVerified,
+      profilePicture:
+        user.profilePicture ??
+        providerPage?.profilePicture ??
+        (studentVerified ? user.studentProfile?.profilePicture : null),
+      provider: providerPage
+        ? {
+            displayName: providerPage.displayName,
+            description: providerPage.description,
+            providerType: providerPage.providerType,
+            businessName: providerPage.businessName,
+            verifiedAt: providerPage.verifiedAt,
+            socialLinks: providerPage.socialLinks,
+          }
+        : null,
+      listings: providerPage?.listings ?? [],
+    };
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {

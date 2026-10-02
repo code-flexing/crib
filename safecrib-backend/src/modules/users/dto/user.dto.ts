@@ -15,6 +15,12 @@ export class UpdateUserDto {
   @MaxLength(100)
   displayName?: string;
 
+  @ApiPropertyOptional({ example: 'avatar-media-id' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  profilePicture?: string;
+
   @ApiPropertyOptional({ example: 'STUDENT' })
   @IsOptional()
   @IsEnum(['STUDENT', 'AGENT', 'LANDLORD'])

@@ -1,0 +1,174 @@
+"use client";
+
+import Image from "next/image";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { DashboardNav } from "@/components/dashboard/DashboardNav";
+import { PageLoader } from "@/components/loading/PageLoader";
+import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
+import { BackHomeLink } from "@/components/ui/BackHomeLink";
+import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
+import { cachedApiFetch, clearSession, getCachedCurrentUser, isUnauthorizedError, resolveMediaUrl, unwrapData } from "@/lib/api";
+
+type Listing = {
+  id: string;
+  title?: string;
+  description?: string;
+  price?: number;
+  discountAmount?: number;
+  campus?: string;
+  address?: string;
+  photos?: Array<{ url?: string }>;
+};
+
+type PublicProfile = {
+  id: string;
+  displayName?: string;
+  profilePicture?: string | null;
+  role?: string;
+  createdAt?: string;
+  identityVerified?: boolean;
+  provider?: {
+    displayName?: string;
+    description?: string;
+    providerType?: string;
+    businessName?: string;
+    verifiedAt?: string;
+    socialLinks?: Record<string, string>;
+  } | null;
+  listings?: Listing[];
+};
+
+function readable(value?: string) {
+  return (value ?? "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function SafeLinks({ links }: { links?: Record<string, string> }) {
+  const entries = Object.entries(links ?? {}).filter(([, value]) => typeof value === "string" && /^https?:\/\//i.test(value));
+  if (entries.length === 0) return null;
+  return <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">{entries.map(([label, href]) => <a key={label} href={href} target="_blank" rel="noreferrer" className="text-sm font-medium text-safecrib-green hover:underline">{readable(label) || "Website"}</a>)}</div>;
+}
+
+function PublicListings({ listings }: { listings: Listing[] }) {
+  if (listings.length === 0) return <p className="mt-5 rounded-xl border border-dashed border-black/15 bg-white px-5 py-8 text-center text-sm text-black/55">No public posts to show yet.</p>;
+  return <div className="mt-5 grid gap-4 sm:grid-cols-2">
+    {listings.map((listing) => <article key={listing.id} className="overflow-hidden rounded-xl border border-black/10 bg-white">
+      {listing.photos?.[0]?.url && <Image src={listing.photos[0].url} alt="" width={720} height={440} unoptimized className="h-44 w-full object-cover" />}
+      <div className="p-4">
+        <h3 className="font-medium text-safecrib-black">{listing.title || "Untitled home"}</h3>
+        <p className="mt-2 line-clamp-2 text-sm leading-5 text-black/55">{listing.description || "View this home for details."}</p>
+        <p className="mt-3 font-semibold text-safecrib-black">{typeof listing.price === "number" ? `₦${(listing.price - (listing.discountAmount ?? 0)).toLocaleString()}` : "Price on request"}</p>
+        <p className="mt-1 text-xs text-black/45">{listing.address || listing.campus || ""}</p>
+      </div>
+    </article>)}
+  </div>;
+}
+
+export default function PublicProfilePage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const profileId = params.id;
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [verification, setVerification] = useState<VerificationStageResult | null>(null);
+  const [verificationError, setVerificationError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem("safecrib_access_token")) {
+      router.replace("/login");
+      return;
+    }
+    if (getCachedCurrentUser<{ id?: string }>()?.id === profileId) {
+      router.replace("/profile");
+      return;
+    }
+
+    let active = true;
+    void cachedApiFetch<unknown>(`/api/v1/users/${encodeURIComponent(profileId)}/public-profile`)
+      .then((response) => unwrapData<PublicProfile>(response))
+      .then(async (publicProfile) => {
+        if (!active) return;
+        setProfile(publicProfile);
+        const [pictureUrl, verificationStage] = await Promise.all([
+          resolveMediaUrl(publicProfile.profilePicture),
+          cachedApiFetch<unknown>(`/api/v1/trust/users/${encodeURIComponent(publicProfile.id)}/verification-stage`)
+            .then(normalizeVerificationStage)
+            .catch((verificationLoadError: unknown) => {
+              if (active) setVerificationError(verificationLoadError instanceof Error ? verificationLoadError.message : "Verification badge could not be loaded.");
+              return null;
+            }),
+        ]);
+        if (!active) return;
+        setAvatarUrl(pictureUrl);
+        setVerification(verificationStage);
+      })
+      .catch((loadError: unknown) => {
+        if (isUnauthorizedError(loadError)) {
+          clearSession();
+          router.replace("/login?reason=session-expired");
+          return;
+        }
+        if (active) setUnavailable(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [profileId, router]);
+
+  if (loading) return <PageLoader label="Loading profile" />;
+
+  return (
+    <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
+      <DashboardNav onCreatePage={() => router.push("/page/new")} pageStatus="none" />
+      <section className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
+        <BackHomeLink />
+        {unavailable || !profile ? (
+          <div className="mt-7 rounded-2xl border border-black/10 bg-white px-6 py-12 text-center">
+            <h1 className="text-2xl font-semibold text-safecrib-black">This profile isn’t available</h1>
+            <p className="mt-2 text-sm leading-6 text-black/55">Only verified profiles are visible to other people.</p>
+          </div>
+        ) : (
+          <>
+            <section className="mt-6 overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_18px_45px_rgba(11,12,14,0.05)]">
+              <div className="h-28 bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.45),transparent_30%),linear-gradient(120deg,#0b684c,#b9dfc9)] sm:h-36" />
+              <div className="flex flex-col gap-5 px-5 pb-6 sm:flex-row sm:items-end sm:px-8">
+                <ProfileAvatar src={avatarUrl} seed={profile.id} alt={`${profile.displayName || "Member"} profile`} size="large" className="-mt-14 border-4 border-white sm:-mt-16" />
+                <div className="min-w-0 flex-1 sm:pb-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-safecrib-green">SafeCrib member</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <h1 className="break-words font-display text-3xl font-bold text-safecrib-black sm:text-4xl">{profile.displayName || "SafeCrib member"}</h1>
+                    {verification && <VerificationBadge verification={verification} compact iconOnly />}
+                  </div>
+                  <p className="mt-2 text-sm text-black/55">{readable(profile.role)}{profile.createdAt ? ` · Member since ${new Date(profile.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "long" })}` : ""}</p>
+                </div>
+                {profile.identityVerified && <span className="mb-1 inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">Identity verified</span>}
+              </div>
+            </section>
+
+            {verificationError && <p role="status" className="mt-4 text-sm text-amber-800">Verification badge temporarily unavailable.</p>}
+
+            {profile.provider && <section className="mt-6 rounded-xl border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="provider-about-heading">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Provider</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <h2 id="provider-about-heading" className="text-xl font-semibold text-safecrib-black">{profile.provider.businessName || profile.provider.displayName || "About"}</h2>
+                {verification && <VerificationBadge verification={verification} compact iconOnly />}
+              </div>
+              {profile.provider.providerType && <p className="mt-1 text-sm text-black/50">{readable(profile.provider.providerType)}</p>}
+              {profile.provider.description && <p className="mt-4 max-w-3xl whitespace-pre-line text-sm leading-6 text-black/65">{profile.provider.description}</p>}
+              <SafeLinks links={profile.provider.socialLinks} />
+            </section>}
+
+            <section className="mt-7" aria-labelledby="public-posts-heading">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Activity</p>
+              <h2 id="public-posts-heading" className="mt-1 text-xl font-semibold text-safecrib-black">{profile.provider ? "Homes and posts" : "Public posts"}</h2>
+              <PublicListings listings={profile.listings ?? []} />
+            </section>
+          </>
+        )}
+      </section>
+    </main>
+  );
+}

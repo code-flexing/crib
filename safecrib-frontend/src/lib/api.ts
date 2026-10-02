@@ -21,6 +21,7 @@ export function clearSession() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("safecrib_access_token");
   localStorage.removeItem("safecrib_refresh_token");
+  clearClientCache();
 }
 
 function expireSession() {
@@ -94,9 +95,20 @@ export async function getCurrentUser<T>() {
 }
 
 const clientCachePrefix = "safecrib_cache:";
+const clientCacheTtlMs = 60_000;
 
 function cacheKey(path: string) {
   return `${clientCachePrefix}${path}`;
+}
+
+function cacheUpdatedAtKey(path: string) {
+  return `${cacheKey(path)}:updatedAt`;
+}
+
+function isClientCacheFresh(path: string) {
+  if (typeof window === "undefined") return false;
+  const updatedAt = Number(localStorage.getItem(cacheUpdatedAtKey(path)));
+  return Number.isFinite(updatedAt) && Date.now() - updatedAt < clientCacheTtlMs;
 }
 
 function readClientCache<T>(path: string): T | null {
@@ -115,12 +127,25 @@ export function getCachedCurrentUser<T>() {
 
 function writeClientCache(path: string, value: unknown) {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem(cacheKey(path), JSON.stringify(value)); } catch { /* Storage may be unavailable or full. */ }
+  try {
+    localStorage.setItem(cacheKey(path), JSON.stringify(value));
+    localStorage.setItem(cacheUpdatedAtKey(path), String(Date.now()));
+  } catch { /* Storage may be unavailable or full. */ }
 }
 
 export function clearClientCache(...paths: string[]) {
   if (typeof window === "undefined") return;
-  paths.forEach((path) => localStorage.removeItem(cacheKey(path)));
+  if (paths.length === 0) {
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(clientCachePrefix)) localStorage.removeItem(key);
+    }
+    return;
+  }
+  paths.forEach((path) => {
+    localStorage.removeItem(cacheKey(path));
+    localStorage.removeItem(cacheUpdatedAtKey(path));
+  });
 }
 
 export function primeCurrentUserCache(user: unknown) {
@@ -154,9 +179,11 @@ export function getPendingUpload(purpose: UploadPurpose) {
 }
 
 export async function cachedApiFetch<T>(path: string, init: RequestInit = {}) {
-  const cached = init.method && init.method !== "GET" ? null : readClientCache<T>(path);
+  const cacheable = !init.method || init.method === "GET";
+  const cached = cacheable ? readClientCache<T>(path) : null;
+  if (cached !== null && isClientCacheFresh(path)) return cached;
   const request = apiFetch<T>(path, init).then((value) => {
-    if (!init.method || init.method === "GET") writeClientCache(path, value);
+    if (cacheable) writeClientCache(path, value);
     return value;
   });
   if (cached !== null) {
@@ -168,6 +195,12 @@ export async function cachedApiFetch<T>(path: string, init: RequestInit = {}) {
 
 export async function cachedCurrentUser<T>() {
   const cached = getCachedCurrentUser<T>();
+  if (
+    cached !== null &&
+    (isClientCacheFresh("/api/v1/users/me") || isClientCacheFresh("/api/v1/auth/me"))
+  ) {
+    return cached;
+  }
   const request = getCurrentUser<T>().then((value) => {
     primeCurrentUserCache(value);
     return value;
@@ -515,7 +548,7 @@ export async function resolveMediaUrl(reference: unknown): Promise<string | null
   if (/^(https?:|data:|blob:)/.test(reference)) return reference;
 
   try {
-    const response = await apiFetch<unknown>(`/api/v1/media/${encodeURIComponent(reference)}/access`);
+    const response = await cachedApiFetch<unknown>(`/api/v1/media/${encodeURIComponent(reference)}/access`);
     const mediaData = unwrapData<unknown>(response);
     if (typeof mediaData === "string") return mediaData;
     if (typeof mediaData === "object" && mediaData !== null) {

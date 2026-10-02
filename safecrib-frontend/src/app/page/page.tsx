@@ -8,6 +8,7 @@ import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { PageLoader } from "@/components/loading/PageLoader";
 import { Button } from "@/components/ui/Button";
 import { ReviewPendingState } from "@/components/verification/ReviewPendingState";
+import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
 import { ApiError, apiFetch, displayName, getCurrentUser, normalizeAccountStatus, normalizePageStatus, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
 
 type ProviderPageData = { id?: string; displayName?: string; status?: string; verificationNotes?: string; rejectionReason?: string; reason?: string } | null;
@@ -29,6 +30,7 @@ export default function ProviderWorkspacePage() {
   const [providerPage, setProviderPage] = useState<ProviderPageData>(null);
   const [studentStatus, setStudentStatus] = useState<AccountStatus>("not_submitted");
   const [listings, setListings] = useState<Listing[]>([]);
+  const [verification, setVerification] = useState<VerificationStageResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -48,6 +50,13 @@ export default function ProviderWorkspacePage() {
       setUser(currentUser);
       setProviderPage(page);
       const role = String(currentUser.role ?? "").toUpperCase();
+      if (["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)) {
+        void apiFetch<unknown>("/api/v1/trust/me/verification-stage")
+          .then((response) => setVerification(normalizeVerificationStage(response)))
+          .catch((verificationError: unknown) => {
+            setError(verificationError instanceof Error ? verificationError.message : "We could not load your verification badge.");
+          });
+      }
       let currentStudentStatus: AccountStatus = "not_submitted";
       if (["UNVERIFIED", "STUDENT"].includes(role)) {
         const statusResponse = unwrapData<unknown>(
@@ -107,7 +116,10 @@ export default function ProviderWorkspacePage() {
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">{studentReviewPending ? "Account review" : "Provider workspace"}</p>
-            <h1 className="mt-2 text-3xl font-medium text-safecrib-black">{studentReviewPending ? "Your profile is awaiting approval" : providerPage?.displayName || displayName(user?.displayName) || "Manage your homes"}</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <h1 className="text-3xl font-medium text-safecrib-black">{studentReviewPending ? "Your profile is awaiting approval" : providerPage?.displayName || displayName(user?.displayName) || "Manage your homes"}</h1>
+              {!studentReviewPending && verification && <VerificationBadge verification={verification} compact iconOnly />}
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-black/60">{studentReviewPending ? "Your student profile is with the SafeCrib review team." : "Manage your provider verification and accommodation listings from one place."}</p>
           </div>
           {verified && <Link href="/page/homes/new"><Button type="button">+ Create a home</Button></Link>}
@@ -122,8 +134,10 @@ export default function ProviderWorkspacePage() {
             <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/45">Provider verification</p>
-                <h2 id="verification-heading" className="mt-2 text-xl font-medium text-safecrib-black">{providerPage?.displayName || "Provider Page"}</h2>
-                <p className="mt-2 text-sm leading-6 text-black/60">Status: <span className="font-semibold text-safecrib-black">{statusLabel(rawPageStatus)}</span></p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <h2 id="verification-heading" className="text-xl font-medium text-safecrib-black">{providerPage?.displayName || "Provider Page"}</h2>
+                  {verification && <VerificationBadge verification={verification} compact iconOnly />}
+                </div>
               </div>
               {setupAvailable && <Link href="/page/new"><Button type="button" variant="secondary">{rawPageStatus === "REJECTED" ? "Update and resubmit" : rawPageStatus === "DRAFT" ? "Continue verification" : "Set up provider Page"}</Button></Link>}
             </div>

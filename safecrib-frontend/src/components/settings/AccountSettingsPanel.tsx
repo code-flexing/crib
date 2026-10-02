@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { ApiError, apiFetch, primeCurrentUserCache, unwrapData } from "@/lib/api";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
+import { ApiError, apiFetch, cachedApiFetch, cachedCurrentUser, primeCurrentUserCache, resolveMediaUrl, unwrapData, uploadDocument } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { useTheme, type ThemeMode } from "@/components/theme/ThemeProvider";
 
-type Account = { id?: string; email?: string; role?: string; displayName?: unknown };
+type Account = { id?: string; email?: string; role?: string; displayName?: unknown; profilePicture?: string };
 
 function nameFrom(value: unknown) {
   if (typeof value === "string") return value;
@@ -22,6 +23,8 @@ export function AccountSettingsPanel({ heading = "Account details" }: { heading?
   const [account, setAccount] = useState<Account | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -30,14 +33,58 @@ export function AccountSettingsPanel({ heading = "Account details" }: { heading?
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    void apiFetch<unknown>("/api/v1/auth/me", { method: "POST" }).then((response) => {
-      const currentAccount = unwrapData<Account>(response);
+    void cachedCurrentUser<Account>().then(async (currentAccount) => {
       setAccount(currentAccount);
       setDisplayName(nameFrom(currentAccount.displayName));
+      let profilePicture = currentAccount.profilePicture;
+      if (!profilePicture && ["UNVERIFIED", "STUDENT"].includes(String(currentAccount.role ?? "").toUpperCase())) {
+        const student = unwrapData<{ profilePicture?: string } | null>(await cachedApiFetch<unknown>("/api/v1/student-profiles/me"));
+        profilePicture = student?.profilePicture;
+      } else if (!profilePicture && ["AGENT", "LANDLORD"].includes(String(currentAccount.role ?? "").toUpperCase())) {
+        const provider = unwrapData<{ profilePicture?: string } | null>(await cachedApiFetch<unknown>("/api/v1/provider-pages/me"));
+        profilePicture = provider?.profilePicture;
+      }
+      setAvatarUrl(await resolveMediaUrl(profilePicture));
     }).catch((loadError: unknown) => {
       setError(loadError instanceof Error ? loadError.message : "We could not load account settings.");
     });
   }, []);
+
+  const updateProfilePicture = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Choose an image file for your profile photo.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Your profile photo must be 10 MB or smaller.");
+      return;
+    }
+
+    setAvatarSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      const profilePicture = await uploadDocument(file, "AVATAR");
+      const response = await apiFetch<unknown>("/api/v1/users/me", {
+        method: "PATCH",
+        body: JSON.stringify({ profilePicture }),
+      });
+      const updated = unwrapData<Account>(response);
+      const nextAccount = { ...account, ...updated, profilePicture: updated?.profilePicture ?? profilePicture };
+      setAccount(nextAccount);
+      primeCurrentUserCache(nextAccount);
+      setAvatarUrl(await resolveMediaUrl(nextAccount.profilePicture));
+      setNotice("Profile photo updated.");
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "We could not update your profile photo.");
+    } finally {
+      setAvatarSaving(false);
+    }
+  };
 
   const updateDisplayName = async (event: FormEvent) => {
     event.preventDefault();
@@ -94,6 +141,13 @@ export function AccountSettingsPanel({ heading = "Account details" }: { heading?
         <div className="grid gap-8 lg:grid-cols-2">
           <form onSubmit={updateDisplayName} className="grid content-start gap-4">
             <div><h3 className="font-medium text-safecrib-black">Personal details</h3><p className="mt-1 text-sm leading-6 text-black/55">Your email and account mode are managed by SafeCrib.</p></div>
+            <div className="flex items-center gap-4">
+              <ProfileAvatar src={avatarUrl} seed={account?.id ?? account?.email ?? "safecrib-member-avatar"} alt={`${nameFrom(account?.displayName) || "Your"} profile`} size="medium" />
+              <label className="inline-flex min-h-10 cursor-pointer items-center rounded-lg border border-black/15 px-4 py-2 text-sm font-medium text-black/75 transition-colors hover:bg-black/[0.03]">
+                {avatarSaving ? "Uploading photo..." : "Change profile photo"}
+                <input type="file" accept="image/*" disabled={avatarSaving} onChange={(event) => void updateProfilePicture(event)} className="sr-only" />
+              </label>
+            </div>
             <label className="block text-sm font-medium">Display name<input required maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-2 w-full border border-black/15 px-4 py-3 font-normal focus:border-safecrib-green focus:outline-none" /></label>
             <div className="grid gap-3 sm:grid-cols-2"><p className="break-all text-sm"><span className="block text-xs uppercase tracking-[0.1em] text-black/45">Email</span><span className="mt-1 block text-black/75">{account?.email ?? "Loading..."}</span></p><p className="text-sm"><span className="block text-xs uppercase tracking-[0.1em] text-black/45">Account mode</span><span className="mt-1 block text-black/75">{account?.role?.replaceAll("_", " ") ?? "Loading..."}</span></p></div>
             <Button type="submit" loading={nameSaving} className="w-fit">Save name</Button>

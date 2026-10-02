@@ -185,6 +185,7 @@ export class TrustService {
       flaggedForReview: trustScore.flaggedForReview,
     });
 
+    const persistedTrustScore = Math.round(user.trustScore ?? trustScore.score ?? 0);
     await this.prisma.userVerification.upsert({
       where: { userId },
       update: {
@@ -195,7 +196,7 @@ export class TrustService {
         identityVerified: computed.criteria.some((criterion) => criterion.key === 'identity' && criterion.met),
         providerVerified: computed.criteria.some((criterion) => criterion.key === 'provider' && criterion.met),
         studentProfileApproved: computed.criteria.some((criterion) => criterion.key === 'student' && criterion.met),
-        trustScore: computed.stage === 'TRUST_CROWN' ? Math.max(85, Number(user.trustScore ?? trustScore.score ?? 0)) : Number(user.trustScore ?? trustScore.score ?? 0),
+        trustScore: computed.stage === 'TRUST_CROWN' ? Math.max(85, persistedTrustScore) : persistedTrustScore,
         nextMilestone: computed.nextMilestone,
         lastComputedAt: new Date(),
       },
@@ -208,7 +209,7 @@ export class TrustService {
         identityVerified: computed.criteria.some((criterion) => criterion.key === 'identity' && criterion.met),
         providerVerified: computed.criteria.some((criterion) => criterion.key === 'provider' && criterion.met),
         studentProfileApproved: computed.criteria.some((criterion) => criterion.key === 'student' && criterion.met),
-        trustScore: Number(user.trustScore ?? trustScore.score ?? 0),
+        trustScore: persistedTrustScore,
         nextMilestone: computed.nextMilestone,
       },
     });

@@ -1,6 +1,8 @@
 {
   "/api/backend/[...path]/route": "app/api/backend/[...path]/route.js",
-  "/page": "app/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/admin/reviews/[id]/page": "app/admin/reviews/[id]/page.js"
+  "/profile/page": "app/profile/page.js",
+  "/page/new/page": "app/page/new/page.js",
+  "/page/page": "app/page/page.js",
+  "/settings/page": "app/settings/page.js"
 }

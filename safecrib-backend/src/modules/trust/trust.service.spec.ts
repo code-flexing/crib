@@ -138,4 +138,38 @@ describe('TrustService verification badge emails', () => {
 
     expect(emailQueue.add).not.toHaveBeenCalled();
   });
+
+  it('stores fractional user trust scores as an integer in the verification record', async () => {
+    const userVerification = { upsert: vi.fn().mockResolvedValue({}) };
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'user_6',
+          email: 'provider@example.com',
+          displayName: 'A Provider',
+          role: 'AGENT',
+          identityVerified: true,
+          trustScore: 78.5,
+          providerPage: { verificationState: 'VERIFIED' },
+          studentProfile: null,
+          verification: null,
+        }),
+      },
+      fraudReport: { count: vi.fn().mockResolvedValue(0) },
+      userVerification,
+    } as unknown as PrismaService;
+    const service = new TrustService(prisma, { add: vi.fn().mockResolvedValue(undefined) } as never);
+    vi.spyOn(service, 'getTrustScore').mockResolvedValue({
+      score: 78.5,
+      breakdown: {},
+      flaggedForReview: false,
+      lastUpdated: new Date(),
+      eventCount: 0,
+    });
+
+    await service.getVerificationStage('user_6');
+
+    expect(userVerification.upsert.mock.calls[0][0].create.trustScore).toBe(79);
+    expect(userVerification.upsert.mock.calls[0][0].update.trustScore).toBe(79);
+  });
 });

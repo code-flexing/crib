@@ -1,16 +1,18 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { RestrictedActionModal } from "@/components/dashboard/RestrictedActionModal";
+import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { apiFetch, normalizeAccountStatus, normalizePageStatus, resolveMediaUrl, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
+import { apiFetch, cachedApiFetch, normalizeAccountStatus, normalizePageStatus, resolveMediaUrl, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
 
-type Listing = { id: string; title?: string; description?: string; price?: number; discountAmount?: number; discountedPrice?: number; address?: string; campus?: string; lat?: number; lng?: number; locationReference?: string; photos?: (string | { url?: string })[]; images?: string[]; video?: { mediaId?: string; url?: string } | null; providerId?: string; providerPageId?: string; provider?: { id?: string; displayName?: string; email?: string } };
+type Listing = { id: string; ownerId?: string; title?: string; description?: string; price?: number; discountAmount?: number; discountedPrice?: number; address?: string; campus?: string; lat?: number; lng?: number; locationReference?: string; photos?: (string | { url?: string })[]; images?: string[]; video?: { mediaId?: string; url?: string } | null; providerId?: string; providerPageId?: string; provider?: { id?: string; displayName?: string; email?: string } };
 type Profile = { role?: string; studentProfileStatus?: unknown };
 type ProviderPage = { status?: string } | null;
 type ReportType = "FAKE_LISTING" | "MISREPRESENTED" | "DOUBLE_BOOKING" | "SCAM_AGENT" | "OTHER";
@@ -23,6 +25,8 @@ export default function ListingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [listing, setListing] = useState<Listing | null>(null);
+  const [providerVerification, setProviderVerification] = useState<VerificationStageResult | null>(null);
+  const [providerBadgeUnavailable, setProviderBadgeUnavailable] = useState(false);
   const [role, setRole] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [accountStatus, setAccountStatus] = useState<AccountStatus>("not_submitted");
@@ -48,6 +52,14 @@ export default function ListingDetailPage() {
       const user = unwrapData<Profile>(userResponse);
       const page = unwrapData<ProviderPage>(pageResponse);
       setListing(home);
+      if (home.ownerId) {
+        void cachedApiFetch<unknown>(`/api/v1/trust/users/${encodeURIComponent(home.ownerId)}/verification-stage`)
+          .then((response) => setProviderVerification(normalizeVerificationStage(response)))
+          .catch(() => {
+            setProviderVerification(null);
+            setProviderBadgeUnavailable(true);
+          });
+      }
       const accountRole = String(user.role ?? "").toUpperCase();
       const providerRole = ["AGENT", "LANDLORD"].includes(accountRole);
       setRole(accountRole);
@@ -134,7 +146,13 @@ export default function ListingDetailPage() {
           })}</div>}
           {mapUrl && <section className="mt-7" aria-label="Home location"><h2 className="mb-3 text-lg font-medium">Location</h2><iframe title="Home location map" src={mapUrl} loading="lazy" className="h-64 w-full border-0" referrerPolicy="no-referrer-when-downgrade" /></section>}
           {listing.video?.mediaId && <section className="mt-7" aria-label="Home video"><h2 className="mb-3 text-lg font-medium">Home video</h2>{videoUrl ? <video src={videoUrl} controls preload="metadata" className="max-h-[28rem] w-full bg-black" /> : <p className="text-sm text-black/55">Video is not available yet. Refresh the listing to try again.</p>}</section>}
-          <p className="mt-6 text-sm text-black/60">Provider: {listing.provider?.displayName ?? "Verified provider"}</p>
+          <p className="mt-6 flex flex-wrap items-center gap-2 text-sm text-black/60">
+            Provider: {listing.ownerId
+              ? <Link href={`/profile/${encodeURIComponent(listing.ownerId)}`} className="font-medium text-safecrib-green hover:underline">{listing.provider?.displayName ?? "Verified provider"}</Link>
+              : <span>{listing.provider?.displayName ?? "Verified provider"}</span>}
+            {providerVerification && <VerificationBadge verification={providerVerification} compact iconOnly />}
+          </p>
+          {providerBadgeUnavailable && <p className="mt-1 text-xs text-amber-800" role="status">Provider verification badge is temporarily unavailable.</p>}
           <div className="mt-8 flex flex-wrap gap-3">
             <Button type="button" onClick={() => gate("book this home")}>Book this home</Button>
             {!(["AGENT", "LANDLORD"].includes(role)) && <Button type="button" variant="secondary" onClick={() => void toggleBookmark()}>{bookmarked ? "Saved" : "Save"}</Button>}

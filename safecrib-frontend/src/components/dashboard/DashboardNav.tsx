@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
+import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { Icon, type IconName } from "@/components/ui/Icon";
+import { cachedApiFetch, displayName as getDisplayName, getAuthenticatedDisplayName, getCachedCurrentUser, resolveMediaUrl, unwrapData } from "@/lib/api";
 
 type DashboardNavProps = {
   onCreatePage: () => void;
@@ -15,8 +18,10 @@ type DashboardNavProps = {
 const items = [
   { href: "/dashboard", label: "Home", icon: "home" },
   { href: "/support", label: "Support", icon: "support" },
-  { href: "/profile", label: "Settings", icon: "settings" },
+  { href: "/settings", label: "Settings", icon: "settings" },
 ] satisfies { href: string; label: string; icon: IconName }[];
+
+type NavUser = { id?: string; email?: string; displayName?: unknown; role?: string; profilePicture?: string };
 
 function iconLinkClass(active: boolean) {
   return `relative inline-flex h-11 w-11 items-center justify-center rounded-xl border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green ${active ? "border-safecrib-green/20 bg-safecrib-green/10 text-safecrib-green" : "border-transparent text-black/60 hover:border-black/10 hover:bg-black/[0.03] hover:text-safecrib-black"}`;
@@ -31,6 +36,42 @@ export function DashboardNav({ onCreatePage, pageStatus, canManagePage = true, s
   const pathname = usePathname();
   const pageLabel = pageStatus === "none" ? "Create provider Page" : "My provider Page";
   const pageActive = pathname.startsWith("/page");
+  const [navUser, setNavUser] = useState<NavUser | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const cachedUser = getCachedCurrentUser<NavUser>();
+    if (cachedUser) setNavUser(cachedUser);
+    else {
+      const tokenName = getAuthenticatedDisplayName();
+      if (tokenName) setNavUser({ displayName: tokenName });
+    }
+
+    let active = true;
+    const role = String(cachedUser?.role ?? "").toUpperCase();
+    const legacyAvatarPath = ["UNVERIFIED", "STUDENT"].includes(role)
+      ? "/api/v1/student-profiles/me"
+      : ["AGENT", "LANDLORD"].includes(role)
+        ? "/api/v1/provider-pages/me"
+        : null;
+    void (async () => {
+      let reference = cachedUser?.profilePicture;
+      if (!reference && legacyAvatarPath) {
+        const profile = await cachedApiFetch<unknown>(legacyAvatarPath);
+        const profileData = unwrapData<{ profilePicture?: string } | null>(profile);
+        reference = profileData?.profilePicture;
+      }
+      return resolveMediaUrl(reference);
+    })().then((url) => {
+      if (active) setAvatarUrl(url);
+    }).catch(() => {
+      if (active) setAvatarUrl(null);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const accountName = getDisplayName(navUser) || getAuthenticatedDisplayName() || "Your profile";
+  const profileLinkClass = `inline-flex items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green ${pathname === "/profile" ? "ring-2 ring-safecrib-green ring-offset-2" : ""}`;
 
   return (
     <header className="border-b border-black/10 bg-safecrib-white md:sticky md:top-0 md:z-40">
@@ -45,12 +86,15 @@ export function DashboardNav({ onCreatePage, pageStatus, canManagePage = true, s
           </Link>)}
           {canManagePage && <button type="button" onClick={onCreatePage} aria-label={pageLabel} title={pageLabel} aria-current={pageActive ? "page" : undefined} className={iconLinkClass(pageActive)}><Icon name="page" /></button>}
         </nav>
+        <Link href="/profile" aria-label="View your profile" title="Your profile" aria-current={pathname === "/profile" ? "page" : undefined} className={profileLinkClass}>
+          <ProfileAvatar src={avatarUrl} seed={navUser?.id ?? navUser?.email ?? "safecrib-member-avatar"} alt={`${accountName} profile`} size="small" />
+        </Link>
       </div>
       <nav aria-label="Mobile dashboard navigation" className="fixed inset-x-0 bottom-0 z-50 flex border-t border-black/10 bg-safecrib-white pb-[var(--safe-area-bottom)] md:hidden">
         <Link href="/dashboard" aria-label="Home" title="Home" aria-current={pathname === "/dashboard" ? "page" : undefined} className={`mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pathname === "/dashboard" ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="home" className="h-6 w-6" /></Link>
         <Link href="/support" aria-label="Support" title="Support" aria-current={pathname.startsWith("/support") ? "page" : undefined} className={`relative mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pathname.startsWith("/support") ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="support" className="h-6 w-6" /><SupportCount count={supportCount} /></Link>
         {canManagePage && <button type="button" onClick={onCreatePage} aria-label={pageLabel} title={pageLabel} aria-current={pageActive ? "page" : undefined} className={`mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pageActive ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="page" className="h-6 w-6" /></button>}
-        <Link href="/profile" aria-label="Settings" title="Settings" aria-current={pathname === "/profile" ? "page" : undefined} className={`mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pathname === "/profile" ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="settings" className="h-6 w-6" /></Link>
+        <Link href="/settings" aria-label="Settings" title="Settings" aria-current={pathname === "/settings" ? "page" : undefined} className={`mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pathname === "/settings" ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="settings" className="h-6 w-6" /></Link>
       </nav>
     </header>
   );

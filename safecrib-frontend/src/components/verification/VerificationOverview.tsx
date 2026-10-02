@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, apiFetch, unwrapData } from "@/lib/api";
+import { ApiError, apiFetch, cachedApiFetch, cachedCurrentUser, primeCurrentUserCache, unwrapData } from "@/lib/api";
 import { criterionLabel, normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
 
 type Identity = { identityVerified?: boolean; role?: string; trustScore?: number };
@@ -31,13 +31,17 @@ export function VerificationOverview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refresh = false) => {
     setLoading(true);
     setError("");
     setEligible(null);
     let identity: Identity;
     try {
-      identity = unwrapData<Identity>(await apiFetch<unknown>("/api/v1/auth/me", { method: "POST" }));
+      const currentIdentity = unwrapData<Identity>(await (refresh
+        ? apiFetch<unknown>("/api/v1/users/me")
+        : cachedCurrentUser<Identity>()));
+      identity = currentIdentity;
+      if (refresh) primeCurrentUserCache(currentIdentity);
     } catch (identityError) {
       setError(identityError instanceof Error ? identityError.message : "We could not load your account status.");
       setVerification(null);
@@ -56,10 +60,11 @@ export function VerificationOverview() {
     }
 
     setEligible(true);
+    const fetch = refresh ? apiFetch : cachedApiFetch;
     const results = await Promise.allSettled([
-      apiFetch<unknown>("/api/v1/trust/me/verification-stage"),
-      apiFetch<unknown>("/api/v1/trust/me"),
-      apiFetch<unknown>("/api/v1/provider-pages/me"),
+      fetch<unknown>("/api/v1/trust/me/verification-stage"),
+      fetch<unknown>("/api/v1/trust/me"),
+      fetch<unknown>("/api/v1/provider-pages/me"),
     ]);
 
     const [stageResult, scoreResult, pageResult] = results;
@@ -105,7 +110,7 @@ export function VerificationOverview() {
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Account security</p>
           <h2 id="verification-overview-title" className="mt-1 text-xl font-medium text-safecrib-black">Verification status</h2>
         </div>
-        <button type="button" onClick={() => void load()} disabled={loading} className="border border-black/15 px-3 py-2 text-sm font-medium text-safecrib-black disabled:opacity-50">{loading ? "Refreshing..." : "Refresh"}</button>
+        <button type="button" onClick={() => void load(true)} disabled={loading} className="border border-black/15 px-3 py-2 text-sm font-medium text-safecrib-black disabled:opacity-50">{loading ? "Refreshing..." : "Refresh"}</button>
       </div>
 
       <div className="p-5 sm:p-7">

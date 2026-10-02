@@ -381,6 +381,16 @@ export class ProviderPagesService {
       approved ? undefined : reason ?? 'No reason provided',
     );
 
+    if (approved) {
+      try {
+        await this.trustService.getVerificationStage(page.ownerId);
+      } catch (error) {
+        this.logger.error(
+          `Unable to update verification badge after approval for ${page.owner.email}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
     return { ...updated, reviewQueueId: queue.id };
   }
 

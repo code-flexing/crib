@@ -86,21 +86,21 @@ export function normalizeVerificationStage(value: unknown): VerificationStageRes
   };
 }
 
-export function VerificationBadge({ verification, compact = false }: { verification: VerificationStageResult; compact?: boolean }) {
+export function VerificationBadge({ verification, compact = false, iconOnly = false }: { verification: VerificationStageResult; compact?: boolean; iconOnly?: boolean }) {
   const config = stageConfig[verification.stage];
 
   return (
     <span
       title={`${config.label}${verification.riskBlocked ? ". Advanced badge upgrade is blocked for review." : ""}`}
       aria-label={`${config.label}${verification.riskBlocked ? ", risk review required" : ""}`}
-      className={`inline-flex w-fit items-center gap-2 border font-semibold ${config.tone} ${compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"}`}
+      className={`inline-flex w-fit items-center gap-2 border font-semibold ${config.tone} ${iconOnly ? "p-1.5" : compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"}`}
     >
       <svg aria-hidden="true" viewBox="0 0 20 20" className={`shrink-0 ${compact ? "h-3.5 w-3.5" : "h-4 w-4"}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         {verification.stage === "PROFILE_VERIFIED" && <path d="m4 10 4 4 8-9" />}
-        {verification.stage === "AGENT_VERIFIED" && <path d="M10 1.8 17 5v5.2c0 4.2-2.8 7-7 8.8-4.2-1.8-7-4.6-7-8.8V5l7-3.2Z" />}
+        {verification.stage === "AGENT_VERIFIED" && <path d="m4 10 4 4 8-9" />}
         {verification.stage === "TRUST_CROWN" && <path d="m2.5 6 4.3 3.2L10 3l3.2 6.2L17.5 6l-1.2 9H3.7L2.5 6Zm1.2 12h12.6" />}
       </svg>
-      <span>{config.label}</span>
+      <span className={iconOnly ? "sr-only" : undefined}>{config.label}</span>
     </span>
   );
 }

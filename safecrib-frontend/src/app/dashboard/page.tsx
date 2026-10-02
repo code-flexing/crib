@@ -7,11 +7,13 @@ import { useEffect, useState } from "react";
 import { EmptyListingsIllustration } from "@/components/branding/EmptyListingsIllustration";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { RestrictedActionModal } from "@/components/dashboard/RestrictedActionModal";
+import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { Button } from "@/components/ui/Button";
-import { apiFetch, cachedApiFetch, displayName, getAuthenticatedDisplayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, primeCurrentUserCache, resolveMediaUrl, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
+import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
+import { apiFetch, cachedApiFetch, cachedCurrentUser, displayName, getAuthenticatedDisplayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, primeCurrentUserCache, resolveMediaUrl, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
 
-type Listing = { id: string; title?: string; description?: string; price?: number; address?: string; campus?: string; photos?: string[]; images?: string[] };
-type Profile = { displayName?: unknown; email?: string; role?: string; profilePicture?: string; studentProfileStatus?: unknown; studentProfile?: { profilePicture?: string } };
+type Listing = { id: string; ownerId?: string; title?: string; description?: string; price?: number; address?: string; campus?: string; photos?: string[]; images?: string[] };
+type Profile = { id?: string; displayName?: unknown; email?: string; role?: string; profilePicture?: string; studentProfileStatus?: unknown; studentProfile?: { profilePicture?: string }; verificationStage?: unknown };
 type StudentProfile = { profilePicture?: string } | null;
 type ProviderPage = { id?: string; status?: string; profilePicture?: string; rejectionReason?: string; reason?: string } | null;
 
@@ -33,6 +35,7 @@ function resolveAccountName(profile: Profile | null) {
 export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [verification, setVerification] = useState<VerificationStageResult | null>(null);
   const [accountStatus, setAccountStatus] = useState<AccountStatus>("not_submitted");
   const [pageStatus, setPageStatus] = useState<PageStatus>("none");
   const [listings, setListings] = useState<Listing[]>([]);
@@ -54,23 +57,19 @@ export default function DashboardPage() {
       if (tokenName) setProfile({ displayName: tokenName });
     }
 
-    void apiFetch<unknown>("/api/v1/auth/me", { method: "POST" }).then(async (identityResponse) => {
-      const identity = unwrapData<Profile>(identityResponse);
-      const identityRole = String(identity.role ?? "").toUpperCase();
-      let user = identity;
-      if (identityRole !== "UNVERIFIED") {
-        try {
-          const profileResponse = unwrapData<Profile>(await apiFetch<unknown>("/api/v1/users/me"));
-          user = { ...identity, ...profileResponse };
-        } catch {
-          user = identity;
-        }
-      }
+    void cachedCurrentUser<Profile>().then(async (currentUser) => {
+      let user = currentUser;
       if (!displayName(user)) user = { ...user, displayName: resolveAccountName(user) };
       primeCurrentUserCache(user);
       const role = String(user.role ?? "").toUpperCase();
       const studentMode = role === "STUDENT";
-      const [studentProfile, studentStatus, providerPage, homes, bookmarks, conversations] = await Promise.all([
+      const verificationRequest = ["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)
+        ? cachedApiFetch<unknown>("/api/v1/trust/me/verification-stage")
+            .then(normalizeVerificationStage)
+            .catch(() => normalizeVerificationStage(user.verificationStage))
+        : Promise.resolve(null);
+      const [verificationStage, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations] = await Promise.all([
+        verificationRequest,
         studentMode ? cachedApiFetch<StudentProfile>("/api/v1/student-profiles/me").catch(() => null) : Promise.resolve(null),
         studentMode ? cachedApiFetch<unknown>("/api/v1/student-profiles/status").catch(() => null) : Promise.resolve(null),
         cachedApiFetch<ProviderPage>("/api/v1/provider-pages/me").catch(() => null),
@@ -78,18 +77,18 @@ export default function DashboardPage() {
         role === "STUDENT" ? cachedApiFetch<Listing[]>("/api/v1/listings/bookmarks").catch(() => []) : Promise.resolve([]),
         cachedApiFetch<unknown>("/api/v1/support/conversations").catch(() => []),
       ]);
-      return { user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations };
-    }).then(async ({ user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations }) => {
+      return { user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, verificationStage };
+    }).then(async ({ user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, verificationStage }) => {
       setProfile({ ...user, displayName: displayName(user) || getAuthenticatedDisplayName() });
+      setVerification(verificationStage);
       const role = String(user.role ?? "").toUpperCase();
       const profileStatus = typeof user.studentProfileStatus === "object" && user.studentProfileStatus !== null && "status" in user.studentProfileStatus
         ? user.studentProfileStatus.status
         : studentStatus && typeof studentStatus === "object" && "status" in studentStatus ? studentStatus.status : studentStatus;
-      const studentVerified = role === "STUDENT" && normalizeAccountStatus(profileStatus) === "approved";
       const providerVerified = ["AGENT", "LANDLORD"].includes(role) && String(providerPage?.status ?? "").toUpperCase() === "VERIFIED";
       const studentProfileData = unwrapData<StudentProfile>(studentProfile);
       const pictureReference = user.profilePicture ?? user.studentProfile?.profilePicture ?? studentProfileData?.profilePicture ?? providerPage?.profilePicture;
-      setProfileImage(studentVerified || providerVerified ? pictureReference ? await resolveMediaUrl(pictureReference) : null : null);
+      setProfileImage(pictureReference ? await resolveMediaUrl(pictureReference) : null);
       setAccountStatus(providerVerified ? "approved" : ["AGENT", "LANDLORD"].includes(role) ? "pending" : normalizeAccountStatus(profileStatus));
       setPageStatus(normalizePageStatus(providerPage?.status));
       setListings(Array.isArray(homes) ? homes : []);
@@ -104,6 +103,7 @@ export default function DashboardPage() {
         return;
       }
       setProfile(null);
+      setVerification(null);
       setAccountStatus("not_submitted");
       setPageStatus("none");
       setListings([]);
@@ -134,9 +134,11 @@ export default function DashboardPage() {
       <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div className="flex items-center gap-4">
-            {profileImage ? <Image src={profileImage} alt={`${accountName || "Your"} profile photo`} width={64} height={64} unoptimized className="h-14 w-14 shrink-0 rounded-full border border-black/10 object-cover" /> : <span aria-label="Default profile photo" className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-safecrib-green/20 bg-safecrib-green/10 text-safecrib-green"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7 fill-none stroke-current" strokeWidth="1.6"><circle cx="12" cy="8" r="3.5" /><path d="M4.8 20c.9-3.3 3.3-5 7.2-5s6.3 1.7 7.2 5" strokeLinecap="round" /></svg></span>}
+            <Link href="/profile" aria-label="View your profile" title="View your profile" className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green">
+              <ProfileAvatar src={profileImage} seed={profile?.id ?? profile?.email ?? "safecrib-member-avatar"} alt={`${accountName || "Your"} profile photo`} size="medium" />
+            </Link>
             <div>
-              {accountName && <h1 className="font-display text-3xl font-bold text-safecrib-green sm:text-4xl">{accountName}</h1>}
+              {accountName && <div className="flex flex-wrap items-center gap-3"><h1 className="font-display text-3xl font-bold text-safecrib-green sm:text-4xl">{accountName}</h1>{verification && <VerificationBadge verification={verification} compact iconOnly />}</div>}
             </div>
           </div>
           <div className="flex flex-wrap gap-4 text-sm font-medium">
@@ -159,6 +161,7 @@ export default function DashboardPage() {
                 <p className="mt-1 text-xs text-black/50">{listing.address ?? listing.campus ?? "Location available in details"}</p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   <Link href={`/dashboard/listings/${listing.id}`} className="rounded-[3px] bg-safecrib-green px-4 py-2.5 text-sm font-medium text-safecrib-white hover:bg-[#0a5f47]">View details</Link>
+                  {listing.ownerId && <Link href={`/profile/${encodeURIComponent(listing.ownerId)}`} className="rounded-[3px] border border-black/15 px-4 py-2.5 text-sm font-medium text-black/65 hover:bg-black/[0.03]">View provider</Link>}
                   {["UNVERIFIED", "STUDENT"].includes(String(profile?.role ?? "").toUpperCase()) && <Button type="button" variant="secondary" className="px-4 py-2.5 text-sm" onClick={() => void toggleBookmark(listing.id)}>{bookmarkedIds.includes(listing.id) ? "Saved" : "Save"}</Button>}
                 </div>
               </div>

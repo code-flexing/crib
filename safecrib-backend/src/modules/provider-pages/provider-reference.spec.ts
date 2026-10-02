@@ -39,15 +39,24 @@ function createService(
       create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'page-id', ...data })),
       update: vi.fn(),
     },
+    adminReviewQueue: { findFirst: vi.fn().mockResolvedValue({ id: 'review-id' }) },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
   };
   const tx = {
+    user: {
+      findUnique: vi.fn().mockResolvedValue({ role }),
+      update: vi.fn().mockResolvedValue({}),
+    },
     studentProfile: {
       findUnique: vi.fn().mockResolvedValue({ status: studentStatus }),
     },
     providerPage: { update: vi.fn().mockResolvedValue({ id: 'page-id' }) },
-    adminReviewQueue: { create: vi.fn().mockResolvedValue({}) },
+    adminReviewQueue: {
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+    },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
+    trustEvent: { create: vi.fn().mockResolvedValue({}) },
   };
   Object.assign(prisma, {
     $transaction: vi.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)),
@@ -55,13 +64,15 @@ function createService(
   const studentProfiles = {
     getProfileStatus: vi.fn().mockResolvedValue({ status: studentStatus, profile: null }),
   };
+  const trustService = { getVerificationStage: vi.fn().mockResolvedValue({}) };
+  const emailQueue = { add: vi.fn().mockResolvedValue(undefined) };
   const service = new ProviderPagesService(
     prisma as unknown as PrismaService,
-    {} as TrustService,
+    trustService as unknown as TrustService,
     studentProfiles as unknown as StudentProfileService,
-    {} as Queue,
+    emailQueue as unknown as Queue,
   );
-  return { prisma, service, tx };
+  return { prisma, service, tx, trustService };
 }
 
 describe('generateBusinessReference', () => {
@@ -127,5 +138,27 @@ describe('ProviderPagesService.create', () => {
     await service.create('user-id', createDto({ switchAccountToProvider: true }));
 
     expect(prisma.providerPage.create.mock.calls[0][0].data.accountModeConversionConsented).toBe(true);
+  });
+});
+
+describe('ProviderPagesService.review', () => {
+  it('computes the verification stage after provider approval', async () => {
+    const { service, trustService } = createService('UNVERIFIED', 'NOT_SUBMITTED', {
+      id: 'page-id',
+      ownerId: 'user-id',
+      verificationState: 'SUBMITTED',
+      providerType: 'AGENT',
+      accountModeConversionConsented: false,
+      owner: {
+        id: 'user-id',
+        email: 'amina@example.com',
+        displayName: 'Amina Homes',
+        role: 'UNVERIFIED',
+      },
+    });
+
+    await service.review('page-id', 'admin-id', true);
+
+    expect(trustService.getVerificationStage).toHaveBeenCalledWith('user-id');
   });
 });

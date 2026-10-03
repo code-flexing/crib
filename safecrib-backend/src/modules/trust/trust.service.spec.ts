@@ -8,6 +8,16 @@ import {
 import type { PrismaService } from '../../infra/prisma/prisma.service.js';
 
 describe('computeUserVerificationStage', () => {
+  it('does not make a newly created unverified account eligible for a badge', () => {
+    const result = computeUserVerificationStage({
+      userId: 'new_account',
+      role: 'UNVERIFIED',
+      identityVerified: false,
+    });
+
+    expect(result.eligible).toBe(false);
+  });
+
   it('does not require student verification for agents', () => {
     const result = computeUserVerificationStage({
       userId: 'agent_1',
@@ -30,6 +40,37 @@ describe('computeUserVerificationStage', () => {
     });
 
     expect(result.criteria.map((criterion) => criterion.key)).toEqual(['identity', 'student', 'followers']);
+    expect(result.eligible).toBe(false);
+  });
+
+  it('makes a student eligible for the basic badge only after admin approval', () => {
+    const result = computeUserVerificationStage({
+      userId: 'student_approved',
+      role: 'STUDENT',
+      identityVerified: true,
+      studentProfileApproved: true,
+    });
+
+    expect(result.eligible).toBe(true);
+    expect(result.stage).toBe('PROFILE_VERIFIED');
+  });
+
+  it('makes a provider eligible for the basic badge only after Page approval', () => {
+    const pending = computeUserVerificationStage({
+      userId: 'provider_pending',
+      role: 'AGENT',
+      identityVerified: true,
+      providerPageVerified: false,
+    });
+    const approved = computeUserVerificationStage({
+      userId: 'provider_approved',
+      role: 'AGENT',
+      identityVerified: true,
+      providerPageVerified: true,
+    });
+
+    expect(pending.eligible).toBe(false);
+    expect(approved.eligible).toBe(true);
   });
 
   it('promotes a fully verified agent to the provider badge', () => {

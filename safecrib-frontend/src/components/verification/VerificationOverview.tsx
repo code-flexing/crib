@@ -168,8 +168,8 @@ export function VerificationOverview() {
             </div>;
           })()}
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div><p className="text-xs uppercase tracking-[0.14em] text-black/45">Current stage</p><div className="mt-2"><VerificationBadge verification={verification} compact /></div></div>
-            <p className="text-sm text-black/55">{verification.stage.replaceAll("_", " ").toLowerCase()}</p>
+            <div><p className="text-xs uppercase tracking-[0.14em] text-black/45">Current stage</p><div className="mt-2">{verification.eligible ? <VerificationBadge verification={verification} compact /> : <p className="text-sm font-medium text-black/65">Awaiting admin approval</p>}</div></div>
+            <p className="text-sm text-black/55">{verification.eligible ? verification.stage.replaceAll("_", " ").toLowerCase() : "Not yet verified"}</p>
           </div>
           {verification.riskBlocked && <p className="mt-5 border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm leading-6 text-[#7A4B00]">An account review is limiting badge upgrades. Your displayed badge remains at the standard verified level.</p>}
 

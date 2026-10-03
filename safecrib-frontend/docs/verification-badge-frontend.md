@@ -5,6 +5,8 @@ The signed-in customer settings page at `/profile` and the admin-only settings p
 ## Implemented UI
 
 - `VerificationBadge` maps `PROFILE_VERIFIED` to a green check, `AGENT_VERIFIED` to a blue shield, and `TRUST_CROWN` to a gold crown.
+- Basic badge eligibility requires identity verification and an admin-approved student profile or verified provider Page. The trust API returns this as `eligible`; ineligible accounts see verification progress without a badge.
+- Compact icon badges render as a 20px circle to keep profile and dashboard headers unobtrusive.
 - The crown is always rendered gold. A response with `riskBlocked: true` is capped at the green baseline regardless of the returned advanced stage; a review warning is shown.
 - `/profile` includes verification stage, badge, trust score, identity state, provider Page state, risk state, next milestone, API update time, and expandable criteria.
 - Missing or unrecognized stage data produces an unavailable/error state, not a locally inferred badge.
@@ -26,7 +28,7 @@ The signed-in customer settings page at `/profile` and the admin-only settings p
 | `GET /trust/users/:userId/verification-stage` | Other user's staged badge | Not used by the current-account settings UI |
 | `GET /trust/users/:userId/breakdown` | Detailed trust breakdown | Admin-only; not used by provider/student UI |
 
-The live OpenAPI lists the trust routes but does not publish a response schema for them. The UI accepts the response fields in the product contract: `stage`, `badge`, `badgeColor`, `riskBlocked`, `nextMilestone`, `criteria`, and `generatedAt`. It reads score from `trustScore` or `score` in `/trust/me`, and identity from `identityVerified` or the `identity` criterion. Missing optional fields are displayed as unavailable.
+The live OpenAPI lists the trust routes but does not publish a response schema for them. The UI accepts the response fields in the product contract: `stage`, `badge`, `badgeColor`, `eligible`, `riskBlocked`, `nextMilestone`, `criteria`, and `generatedAt`. It reads score from `trustScore` or `score` in `/trust/me`, and identity from `identityVerified` or the `identity` criterion. Missing optional fields are displayed as unavailable.
 
 Example stage response:
 

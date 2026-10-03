@@ -21,6 +21,7 @@ export interface VerificationStageCriterion {
 export interface VerificationStageResult {
   userId: string;
   role: string | null;
+  eligible: boolean;
   stage: VerificationStageName;
   badge: VerificationBadge;
   badgeColor: VerificationBadgeColor;
@@ -79,6 +80,11 @@ export function computeUserVerificationStage(
   const followersMet = (input.followerCount ?? 0) >= 10;
 
   const isProvider = ['AGENT', 'LANDLORD'].includes(role ?? '');
+  const eligible = identityMet && (
+    (isProvider && providerMet) ||
+    (role === 'STUDENT' && studentMet) ||
+    role === 'ADMIN'
+  );
   const criteria: VerificationStageCriterion[] = [
     { key: 'identity', label: 'Identity verified', met: identityMet, required: true },
     ...(isProvider
@@ -140,6 +146,7 @@ export function computeUserVerificationStage(
   return {
     userId: input.userId,
     role,
+    eligible,
     stage,
     badge,
     badgeColor,
@@ -282,9 +289,11 @@ export class TrustService {
     const previous = user.verification;
     const identityMet = computed.criteria.some((criterion) => criterion.key === 'identity' && criterion.met);
     const newlyAwarded =
-      (computed.stage === 'TRUST_CROWN' && previous?.stage !== 'TRUST_CROWN') ||
-      (computed.stage === 'AGENT_VERIFIED' && previous?.stage !== 'AGENT_VERIFIED' && previous?.stage !== 'TRUST_CROWN') ||
-      (computed.stage === 'PROFILE_VERIFIED' && identityMet && previous?.identityVerified !== true);
+      computed.eligible && (
+        (computed.stage === 'TRUST_CROWN' && previous?.stage !== 'TRUST_CROWN') ||
+        (computed.stage === 'AGENT_VERIFIED' && previous?.stage !== 'AGENT_VERIFIED' && previous?.stage !== 'TRUST_CROWN') ||
+        (computed.stage === 'PROFILE_VERIFIED' && identityMet && previous?.identityVerified !== true)
+      );
 
     if (!newlyAwarded) return;
 

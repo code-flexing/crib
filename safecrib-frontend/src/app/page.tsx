@@ -237,7 +237,7 @@ export default function Home() {
       <section id="campus" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-14 sm:px-7 sm:py-16">
         <div className="grid gap-8 md:grid-cols-[0.85fr_1.15fr] md:items-end">
           <div data-reveal>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-safecrib-green">Made for campus days</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-safecrib-greenpls update profile well ">Made for campus days</p>
             <h2 className="mt-3 max-w-md font-display text-3xl font-semibold leading-tight sm:text-4xl">From first lecture to lights out.</h2>
           </div>
           <p className="max-w-xl text-base leading-7 text-black/60" data-reveal>

@@ -190,16 +190,6 @@ export class TrustService {
         studentProfile: {
           select: { status: true },
         },
-        verification: {
-          select: {
-            stage: true,
-            badge: true,
-            badgeColor: true,
-            riskBlocked: true,
-            identityVerified: true,
-            nextMilestone: true,
-          },
-        },
         _count: { select: { followers: true } },
       },
     });
@@ -233,7 +223,12 @@ export class TrustService {
     });
 
     const persistedTrustScore = Math.round(user.trustScore ?? trustScore.score ?? 0);
+    let previousVerification: { stage: VerificationStageName; identityVerified: boolean } | null = null;
     try {
+      previousVerification = await this.prisma.userVerification.findUnique({
+        where: { userId },
+        select: { stage: true, identityVerified: true },
+      });
       await this.prisma.userVerification.upsert({
         where: { userId },
         update: {
@@ -263,13 +258,17 @@ export class TrustService {
       });
     } catch (error) {
       this.logger.error(
-        `Unable to persist verification stage for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+        `Unable to read or persist verification stage for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error.stack : undefined,
       );
       return { ...computed, generatedAt: new Date() };
     }
 
-    this.enqueueBadgeAwardIfNew(user, computed, Number(user.trustScore ?? trustScore.score ?? 0));
+    this.enqueueBadgeAwardIfNew(
+      { ...user, verification: previousVerification },
+      computed,
+      Number(user.trustScore ?? trustScore.score ?? 0),
+    );
 
     return { ...computed, generatedAt: new Date() };
   }

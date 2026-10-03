@@ -183,15 +183,14 @@ describe('TrustService verification badge emails', () => {
           trustScore: 78,
           providerPage: { verificationState: 'VERIFIED' },
           studentProfile: null,
-          verification: {
-            stage: 'PROFILE_VERIFIED',
-            identityVerified: true,
-          },
           _count: { followers: 10 },
         }),
       },
       fraudReport: { count: vi.fn().mockResolvedValue(0) },
-      userVerification: { upsert: vi.fn().mockResolvedValue({}) },
+      userVerification: {
+        findUnique: vi.fn().mockResolvedValue({ stage: 'PROFILE_VERIFIED', identityVerified: true }),
+        upsert: vi.fn().mockResolvedValue({}),
+      },
     } as unknown as PrismaService;
     const service = new TrustService(prisma, emailQueue as never);
     vi.spyOn(service, 'getTrustScore').mockResolvedValue({
@@ -229,16 +228,15 @@ describe('TrustService verification badge emails', () => {
           trustScore: 78,
           providerPage: { verificationState: 'VERIFIED' },
           studentProfile: null,
-          verification: {
-            stage: 'AGENT_VERIFIED',
-            identityVerified: true,
-          },
           _count: { followers: 10 },
         }),
       },
       _count: { followers: 10 },
       fraudReport: { count: vi.fn().mockResolvedValue(0) },
-      userVerification: { upsert: vi.fn().mockResolvedValue({}) },
+      userVerification: {
+        findUnique: vi.fn().mockResolvedValue({ stage: 'AGENT_VERIFIED', identityVerified: true }),
+        upsert: vi.fn().mockResolvedValue({}),
+      },
     } as unknown as PrismaService;
     const service = new TrustService(prisma, emailQueue as never);
     vi.spyOn(service, 'getTrustScore').mockResolvedValue({
@@ -267,12 +265,11 @@ describe('TrustService verification badge emails', () => {
           trustScore: 78.5,
           providerPage: { verificationState: 'VERIFIED' },
           studentProfile: null,
-          verification: null,
           _count: { followers: 10 },
         }),
       },
       fraudReport: { count: vi.fn().mockResolvedValue(0) },
-      userVerification,
+      userVerification: { findUnique: vi.fn().mockResolvedValue(null), ...userVerification },
     } as unknown as PrismaService;
     const service = new TrustService(prisma, { add: vi.fn().mockResolvedValue(undefined) } as never);
     vi.spyOn(service, 'getTrustScore').mockResolvedValue({
@@ -289,7 +286,7 @@ describe('TrustService verification badge emails', () => {
     expect(userVerification.upsert.mock.calls[0][0].update.trustScore).toBe(79);
   });
 
-  it('returns the computed badge when persisting the verification snapshot fails', async () => {
+  it('returns the computed badge when the verification snapshot table is unavailable', async () => {
     const logger = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     const prisma = {
       user: {
@@ -302,12 +299,14 @@ describe('TrustService verification badge emails', () => {
           trustScore: 78,
           providerPage: { verificationState: 'VERIFIED' },
           studentProfile: null,
-          verification: null,
           _count: { followers: 10 },
         }),
       },
       fraudReport: { count: vi.fn().mockResolvedValue(0) },
-      userVerification: { upsert: vi.fn().mockRejectedValue(new Error('snapshot table unavailable')) },
+      userVerification: {
+        findUnique: vi.fn().mockRejectedValue(new Error('snapshot table unavailable')),
+        upsert: vi.fn(),
+      },
     } as unknown as PrismaService;
     const service = new TrustService(prisma, { add: vi.fn().mockResolvedValue(undefined) } as never);
     vi.spyOn(service, 'getTrustScore').mockResolvedValue({
@@ -324,7 +323,7 @@ describe('TrustService verification badge emails', () => {
       badgeColor: 'blue',
     });
     expect(logger).toHaveBeenCalledWith(
-      expect.stringContaining('Unable to persist verification stage for user user_7'),
+      expect.stringContaining('Unable to read or persist verification stage for user user_7'),
       expect.any(String),
     );
     logger.mockRestore();

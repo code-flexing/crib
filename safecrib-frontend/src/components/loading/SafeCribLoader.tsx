@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useTheme } from "@/components/theme/ThemeProvider";
 
 type SafeCribLoaderSize = "sm" | "md" | "lg";
 
@@ -27,11 +30,13 @@ export function SafeCribLoader({
   isExiting = false,
 }: SafeCribLoaderProps) {
   const dimension = fullscreen ? 72 : DIMENSIONS[size];
+  const { resolvedTheme } = useTheme();
+  const logoSource = resolvedTheme === "light" ? "/logo(black).png" : "/logo(light).png";
 
   const mark = (
     <Image
       className={`safecrib-loader ${className ?? ""} ${isExiting ? "safecrib-loader--exiting" : ""}`.trim()}
-      src="/logo.png"
+      src={logoSource}
       width={dimension}
       height={dimension}
       alt={label}

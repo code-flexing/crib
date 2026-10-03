@@ -173,6 +173,7 @@ export class UserService {
     const providerPage = providerVerified ? user.providerPage : null;
     return {
       id: user.id,
+      isVerified: true,
       displayName: providerPage?.displayName ?? user.displayName,
       role: user.role,
       createdAt: user.createdAt,
@@ -262,12 +263,14 @@ export class UserService {
     return {
       users: users.map(({ _count, followers, studentProfile, ...user }) => ({
         ...user,
+        isVerified: true,
         school: studentProfile?.schoolOfStudy ?? null,
         followerCount: _count.followers,
         isFollowing: followers.length > 0,
       })),
       pages: pages.map(({ _count, followers, ...page }) => ({
         ...page,
+        isVerified: true,
         followerCount: _count.followers,
         isFollowing: followers.length > 0,
       })),

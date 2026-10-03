@@ -7,8 +7,8 @@ import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { PageLoader } from "@/components/loading/PageLoader";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
-import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { apiFetch, cachedApiFetch, clearSession, getCachedCurrentUser, getPersistedVerification, isUnauthorizedError, resolveMediaUrl, setPersistedVerification, subscribeClientCacheUpdates, unwrapData } from "@/lib/api";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
+import { apiFetch, cachedApiFetch, clearSession, getCachedCurrentUser, isUnauthorizedError, resolveMediaUrl, subscribeClientCacheUpdates, unwrapData } from "@/lib/api";
 
 type Listing = {
   id: string;
@@ -28,6 +28,7 @@ type PublicProfile = {
   id: string;
   displayName?: string;
   profilePicture?: string | null;
+  isVerified?: boolean;
   role?: string;
   createdAt?: string;
   identityVerified?: boolean;
@@ -80,9 +81,6 @@ export default function PublicProfilePage() {
   const profileId = params.id;
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [verification, setVerification] = useState<VerificationStageResult | null>(() =>
-    normalizeVerificationStage(getPersistedVerification(profileId)),
-  );
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [followPending, setFollowPending] = useState(false);
@@ -100,7 +98,6 @@ export default function PublicProfilePage() {
 
     let active = true;
     const publicProfilePath = `/api/v1/users/${encodeURIComponent(profileId)}/public-profile`;
-    const verificationPath = `/api/v1/trust/users/${encodeURIComponent(profileId)}/verification-stage`;
     const unsubscribeCache = subscribeClientCacheUpdates(({ path, value }) => {
       if (path === publicProfilePath) {
         const refreshedProfile = unwrapData<PublicProfile>(value);
@@ -109,9 +106,6 @@ export default function PublicProfilePage() {
         void resolveMediaUrl(refreshedProfile.profilePicture).then((pictureUrl) => {
           if (active) setAvatarUrl(pictureUrl);
         });
-      } else if (path === verificationPath) {
-        const stage = normalizeVerificationStage(value);
-        if (stage) setVerification(stage);
       }
     });
     void cachedApiFetch<unknown>(publicProfilePath)
@@ -136,16 +130,6 @@ export default function PublicProfilePage() {
         }
       });
 
-    void cachedApiFetch<unknown>(verificationPath)
-      .then((response) => {
-        const verificationStage = normalizeVerificationStage(response);
-        if (verificationStage) setPersistedVerification(profileId, response);
-        return verificationStage;
-      })
-      .then((verificationStage) => { if (active && verificationStage) setVerification(verificationStage); })
-      .catch((verificationLoadError: unknown) => {
-        void verificationLoadError;
-      });
     return () => { active = false; unsubscribeCache(); };
   }, [profileId, router]);
 
@@ -213,7 +197,7 @@ export default function PublicProfilePage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-safecrib-green">SafeCrib member</p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <h1 className="break-words font-display text-3xl font-bold text-safecrib-black sm:text-4xl">{profile.displayName || "SafeCrib member"}</h1>
-                    {verification && <VerificationBadge verification={verification} compact iconOnly />}
+                    <VerificationBadge verified={profile.isVerified === true} compact iconOnly />
                   </div>
                   <p className="mt-2 text-sm text-black/55">{readable(profile.role)}{profile.createdAt ? ` · Member since ${new Date(profile.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "long" })}` : ""}</p>
                   <p className="mt-1 text-sm text-black/55">{profile.followerCount ?? 0} followers</p>
@@ -236,7 +220,6 @@ export default function PublicProfilePage() {
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Provider</p>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <h2 id="provider-about-heading" className="text-xl font-semibold text-safecrib-black">{profile.provider.businessName || profile.provider.displayName || "About"}</h2>
-                {verification && <VerificationBadge verification={verification} compact iconOnly />}
               </div>
               {profile.provider.providerType && <p className="mt-1 text-sm text-black/50">{readable(profile.provider.providerType)}</p>}
               {profile.provider.description && <p className="mt-4 max-w-3xl whitespace-pre-line text-sm leading-6 text-black/65">{profile.provider.description}</p>}

@@ -89,24 +89,26 @@ export function normalizeVerificationStage(value: unknown): VerificationStageRes
   };
 }
 
-export function VerificationBadge({ verification, compact = false, iconOnly = false }: { verification: VerificationStageResult; compact?: boolean; iconOnly?: boolean }) {
-  if (!verification.eligible) return null;
+export function VerificationBadge({ verification, verified = false, compact = false, iconOnly = false }: { verification?: VerificationStageResult | null; verified?: boolean; compact?: boolean; iconOnly?: boolean }) {
+  if (!verification?.eligible && !verified) return null;
 
-  const config = stageConfig[verification.stage];
+  const stage = verification?.eligible ? verification.stage : "PROFILE_VERIFIED";
+  const riskBlocked = verification?.riskBlocked === true;
+  const config = stageConfig[stage];
 
   return (
     <span
-      title={`${config.label}${verification.riskBlocked ? ". Advanced badge upgrade is blocked for review." : ""}`}
-      aria-label={`${config.label}${verification.riskBlocked ? ", risk review required" : ""}`}
+      title={`${config.label}${riskBlocked ? ". Advanced badge upgrade is blocked for review." : ""}`}
+      aria-label={`${config.label}${riskBlocked ? ", risk review required" : ""}`}
       className={`inline-flex w-fit items-center gap-2 rounded-full border font-semibold ${config.tone} ${iconOnly ? "h-5 w-5 justify-center border-0 bg-transparent p-0" : compact ? "px-2 py-0.5 text-[0.7rem]" : "px-3 py-1.5 text-sm"}`}
     >
       {iconOnly ? <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path fill="currentColor" stroke="none" d="M12 1.25 14.1 3.1l2.8-.75L18 5.1l2.9.45-.45 2.9 2.3 2.05-1.9 2.3.75 2.9-2.75 1.15-.5 2.9-2.9-.45-2.1 2.7-2.3-1.9-2.85.75-1.15-2.75-2.9-.45.45-2.9L2.3 12.7l1.9-2.3-.75-2.9L6.2 6.35l.5-2.9 2.9.45Z" />
-        {verification.stage === "TRUST_CROWN" ? <path d="m5.5 9 4 2.6L12 6l2.5 5.6L18.5 9l-1 8h-11z" /> : <path d="m7.5 12 3 3 6-6" />}
+        {stage === "TRUST_CROWN" ? <path d="m5.5 9 4 2.6L12 6l2.5 5.6L18.5 9l-1 8h-11z" /> : <path d="m7.5 12 3 3 6-6" />}
       </svg> : <svg aria-hidden="true" viewBox="0 0 20 20" className={`shrink-0 ${compact ? "h-3.5 w-3.5" : "h-4 w-4"}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        {verification.stage === "PROFILE_VERIFIED" && <path d="m4 10 4 4 8-9" />}
-        {verification.stage === "AGENT_VERIFIED" && <path d="m4 10 4 4 8-9" />}
-        {verification.stage === "TRUST_CROWN" && <path d="m2.5 6 4.3 3.2L10 3l3.2 6.2L17.5 6l-1.2 9H3.7L2.5 6Zm1.2 12h12.6" />}
+        {stage === "PROFILE_VERIFIED" && <path d="m4 10 4 4 8-9" />}
+        {stage === "AGENT_VERIFIED" && <path d="m4 10 4 4 8-9" />}
+        {stage === "TRUST_CROWN" && <path d="m2.5 6 4.3 3.2L10 3l3.2 6.2L17.5 6l-1.2 9H3.7L2.5 6Zm1.2 12h12.6" />}
       </svg>}
       <span className={iconOnly ? "sr-only" : undefined}>{config.label}</span>
     </span>

@@ -6,12 +6,14 @@ import { useEffect, useRef, useState } from "react";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { Icon } from "@/components/ui/Icon";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
 import { apiFetch, cachedApiFetch, resolveMediaUrl, unwrapData } from "@/lib/api";
 
 type UserResult = {
   id: string;
   displayName?: string | null;
   profilePicture?: string | null;
+  isVerified?: boolean;
   role: string;
   school?: string | null;
   followerCount: number;
@@ -22,6 +24,7 @@ type PageResult = {
   ownerId: string;
   displayName: string;
   profilePicture?: string | null;
+  isVerified?: boolean;
   providerType?: string | null;
   followerCount: number;
   isFollowing: boolean;
@@ -139,7 +142,10 @@ export default function ConnectPage() {
               <DiscoveryAvatar reference={person.profilePicture} seed={person.id} label={person.displayName || "SafeCrib member"} />
             </Link>
             <div className="min-w-0 flex-1">
-              <Link href={`/profile/${encodeURIComponent(person.id)}`} className="block truncate font-semibold text-safecrib-black hover:text-safecrib-green">{person.displayName || "SafeCrib member"}</Link>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Link href={`/profile/${encodeURIComponent(person.id)}`} className="truncate font-semibold text-safecrib-black hover:text-safecrib-green">{person.displayName || "SafeCrib member"}</Link>
+                {person.isVerified && <VerificationBadge verified compact iconOnly />}
+              </div>
               <p className="mt-1 truncate text-xs text-black/50">{person.school || person.role.replaceAll("_", " ").toLowerCase()}</p>
               <p className="mt-1 text-xs text-black/45">{person.followerCount} followers</p>
             </div>
@@ -159,7 +165,10 @@ export default function ConnectPage() {
               <DiscoveryAvatar reference={page.profilePicture} seed={page.ownerId} label={page.displayName} />
             </Link>
             <div className="min-w-0 flex-1">
-              <Link href={`/profile/${encodeURIComponent(page.ownerId)}`} className="block truncate font-semibold text-safecrib-black hover:text-safecrib-green">{page.displayName}</Link>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Link href={`/profile/${encodeURIComponent(page.ownerId)}`} className="truncate font-semibold text-safecrib-black hover:text-safecrib-green">{page.displayName}</Link>
+                {page.isVerified && <VerificationBadge verified compact iconOnly />}
+              </div>
               <p className="mt-1 truncate text-xs text-black/50">{page.providerType?.replaceAll("_", " ").toLowerCase() || "provider"}</p>
               <p className="mt-1 text-xs text-black/45">{page.followerCount} followers</p>
             </div>

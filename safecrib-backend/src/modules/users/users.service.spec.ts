@@ -33,6 +33,7 @@ describe('UserService.getPublicProfile', () => {
     const result = await service.getPublicProfile('user-id');
     const select = findUnique.mock.calls[0][0].select;
 
+    expect(result.isVerified).toBe(true);
     expect(result.profilePicture).toBe('avatar-id');
     expect(result.provider?.displayName).toBe('Amina Homes');
     expect(result.listings).toHaveLength(1);

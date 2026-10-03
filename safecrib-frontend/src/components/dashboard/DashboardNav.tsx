@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { Icon, type IconName } from "@/components/ui/Icon";
-import { cachedApiFetch, displayName as getDisplayName, getAuthenticatedDisplayName, getCachedCurrentUser, resolveMediaUrl, unwrapData } from "@/lib/api";
+import { cachedApiFetch, displayName as getDisplayName, getAuthenticatedDisplayName, getCachedCurrentUser, logoutSession, resolveMediaUrl, unwrapData } from "@/lib/api";
 
 type DashboardNavProps = {
   onCreatePage: () => void;
@@ -34,6 +34,7 @@ function SupportCount({ count }: { count: number }) {
 
 export function DashboardNav({ onCreatePage, pageStatus, canManagePage = true, supportCount = 0 }: DashboardNavProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const pageLabel = pageStatus === "none" ? "Create provider Page" : "My provider Page";
   const pageActive = pathname.startsWith("/page");
   const [navUser, setNavUser] = useState<NavUser | null>(null);
@@ -72,6 +73,9 @@ export function DashboardNav({ onCreatePage, pageStatus, canManagePage = true, s
 
   const accountName = getDisplayName(navUser) || getAuthenticatedDisplayName() || "Your profile";
   const profileLinkClass = `inline-flex items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green ${pathname === "/dashboard" ? "hidden md:inline-flex" : ""} ${pathname === "/profile" ? "ring-2 ring-safecrib-green ring-offset-2" : ""}`;
+  const handleSignOut = () => {
+    void logoutSession().finally(() => router.replace("/login"));
+  };
 
   return (
     <header className="border-b border-black/10 bg-safecrib-white md:sticky md:top-0 md:z-40">
@@ -85,6 +89,7 @@ export function DashboardNav({ onCreatePage, pageStatus, canManagePage = true, s
             {item.href === "/support" && <SupportCount count={supportCount} />}
           </Link>)}
           {canManagePage && <button type="button" onClick={onCreatePage} aria-label={pageLabel} title={pageLabel} aria-current={pageActive ? "page" : undefined} className={iconLinkClass(pageActive)}><Icon name="page" /></button>}
+          <button type="button" onClick={handleSignOut} aria-label="Sign out" title="Sign out" className={iconLinkClass(false)}><Icon name="logout" /></button>
         </nav>
         <Link href="/profile" aria-label="View your profile" title="Your profile" aria-current={pathname === "/profile" ? "page" : undefined} className={profileLinkClass}>
           <ProfileAvatar src={avatarUrl} seed={navUser?.id ?? navUser?.email ?? "safecrib-member-avatar"} alt={`${accountName} profile`} size="small" />
@@ -95,6 +100,7 @@ export function DashboardNav({ onCreatePage, pageStatus, canManagePage = true, s
         <Link href="/support" aria-label="Support" title="Support" aria-current={pathname.startsWith("/support") ? "page" : undefined} className={`relative mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pathname.startsWith("/support") ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="support" className="h-6 w-6" /><SupportCount count={supportCount} /></Link>
         {canManagePage && <button type="button" onClick={onCreatePage} aria-label={pageLabel} title={pageLabel} aria-current={pageActive ? "page" : undefined} className={`mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pageActive ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="page" className="h-6 w-6" /></button>}
         <Link href="/settings" aria-label="Settings" title="Settings" aria-current={pathname === "/settings" ? "page" : undefined} className={`mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl ${pathname === "/settings" ? "bg-safecrib-green/10 text-safecrib-green" : "text-black/60 hover:bg-black/[0.03]"}`}><Icon name="settings" className="h-6 w-6" /></Link>
+        <button type="button" onClick={handleSignOut} aria-label="Sign out" title="Sign out" className="mx-1 my-2 flex min-h-12 flex-1 items-center justify-center rounded-xl text-black/60 hover:bg-red-50 hover:text-red-700"><Icon name="logout" className="h-6 w-6" /></button>
       </nav>
     </header>
   );

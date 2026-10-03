@@ -65,6 +65,30 @@ body {
   transform: translateY(0);
 }
 
+.landing-hero-copy {
+  animation: landing-arrive 720ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.landing-campus {
+  animation: landing-arrive 850ms cubic-bezier(0.2, 0.75, 0.25, 1) 120ms both;
+}
+
+.landing-campus-art .campus-scene {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: campus-scene-arrive 900ms cubic-bezier(0.2, 0.75, 0.25, 1) 220ms both;
+}
+
+.landing-campus-art .campus-route {
+  animation: campus-route-draw 1300ms ease-out 360ms both;
+}
+
+.landing-campus-art .campus-shuttle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: campus-shuttle-arrive 650ms cubic-bezier(0.2, 0.75, 0.25, 1) 720ms both;
+}
+
 .safecrib-ambient-card {
   animation: safecrib-card-float 7s ease-in-out infinite;
   transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
@@ -127,6 +151,26 @@ body {
   }
 }
 
+@keyframes landing-arrive {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes campus-scene-arrive {
+  from { opacity: 0; transform: translateY(14px) scale(0.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes campus-route-draw {
+  from { stroke-dashoffset: 90; opacity: 0.25; }
+  to { stroke-dashoffset: 0; opacity: 1; }
+}
+
+@keyframes campus-shuttle-arrive {
+  from { opacity: 0; transform: translateY(7px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -136,6 +180,16 @@ body {
     opacity: 1;
     transform: none;
     transition: none;
+  }
+
+  .landing-hero-copy,
+  .landing-campus,
+  .landing-campus-art .campus-scene,
+  .landing-campus-art .campus-route,
+  .landing-campus-art .campus-shuttle {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 
   .safecrib-ambient-card {

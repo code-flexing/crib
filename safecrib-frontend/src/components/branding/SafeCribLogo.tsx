@@ -11,6 +11,7 @@ type SafeCribLogoProps = {
   href?: string | false;
   className?: string;
   priority?: boolean;
+  inverse?: boolean;
 };
 
 /**
@@ -21,9 +22,10 @@ export function SafeCribLogo({
   href = "/",
   className,
   priority = true,
+  inverse = false,
 }: SafeCribLogoProps) {
   const { resolvedTheme } = useTheme();
-  const logoSource = resolvedTheme === "light" ? "/logo(black).png" : "/logo(light).png";
+  const logoSource = inverse || resolvedTheme !== "light" ? "/logo(light).png" : "/logo(black).png";
   const mark = (
     <Image
       src={logoSource}
@@ -42,7 +44,7 @@ export function SafeCribLogo({
     <Link
       href={href}
       aria-label="SafeCrib home"
-      className="inline-flex items-center rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-safecrib-green"
+      className={`inline-flex items-center rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 ${inverse ? "focus-visible:outline-white" : "focus-visible:outline-safecrib-green"}`}
     >
       {mark}
     </Link>

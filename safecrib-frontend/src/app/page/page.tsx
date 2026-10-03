@@ -50,16 +50,15 @@ export default function ProviderWorkspacePage() {
       setUser(currentUser);
       setProviderPage(page);
       const role = String(currentUser.role ?? "").toUpperCase();
-      const currentStage = normalizeVerificationStage(currentUser.verificationStage);
-      if (currentStage) setVerification(currentStage);
       if (["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)) {
         void apiFetch<unknown>("/api/v1/trust/me/verification-stage")
           .then((response) => {
             const stage = normalizeVerificationStage(response);
-            if (stage) setVerification(stage);
+            setVerification(stage);
           })
           .catch(() => {
-            if (!currentStage) setError("We could not load your verification badge.");
+            setVerification(null);
+            setError("We could not load your verification badge.");
           });
       }
       let currentStudentStatus: AccountStatus = "not_submitted";

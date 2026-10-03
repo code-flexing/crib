@@ -1,110 +1,16 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type MouseEvent, type ReactNode } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { PageLoader } from "@/components/loading/PageLoader";
-import { NotificationForm } from "@/components/notifications/NotificationForm";
 import { InstallButton } from "@/components/pwa/InstallButton";
 import { getCurrentUser } from "@/lib/api";
 
-const problems = [
-  { title: "Fake listings", text: "Not every property is what it appears to be online." },
-  { title: "Duplicated homes", text: "The same room or property can be advertised multiple times across channels." },
-  { title: "Unverified providers", text: "Students can struggle to know whether the person listing a home is legitimate." },
-  { title: "Misleading details", text: "Photos, pricing, and location information are not always reliable." },
-];
+type Audience = "student" | "provider";
 
-const verificationFlow = [
-  "Provider",
-  "Provider verification",
-  "Home submitted",
-  "Home verification",
-  "Approved",
-  "Authenticated students discover it",
-];
-
-const studentSteps = [
-  { title: "Create an account", text: "Join with a simple student profile and basic verification." },
-  { title: "Explore verified homes", text: "Browse accommodation with clear evidence and trust context." },
-  { title: "Review provider signals", text: "Understand who is listing the property and what has been checked." },
-  { title: "Book with confidence", text: "Move forward with more clarity before committing." },
-];
-
-const providerSteps = [
-  { title: "Create a provider page", text: "Set up a trusted profile for your property business or entity." },
-  { title: "Submit verification", text: "Provide the information needed for SafeCrib review and trust checks." },
-  { title: "Upload homes", text: "List homes only after the provider profile is in good standing." },
-  { title: "Await review", text: "Homes undergo verification before they become discoverable." },
-];
-
-const marketplaceCards = [
-  { name: "Modern Student House", area: "Garki, Abuja", price: "₦1,850,000 / year", distance: "2.1 km from campus", status: "Verified Home", review: "Provider verified", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=85" },
-  { name: "North View Suites", area: "Wuse, Abuja", price: "₦2,100,000 / year", distance: "1.8 km from campus", status: "Verified Home", review: "Identity confirmed", image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1000&q=85" },
-  { name: "Campus Corner Studio", area: "Yola, Adamawa", price: "₦1,420,000 / year", distance: "0.9 km from campus", status: "Verified Home", review: "Safety checks passed", image: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1000&q=85" },
-];
-
-const providerImage = "https://images.unsplash.com/photo-1560185008-b033106af5c3?auto=format&fit=crop&w=1400&q=85";
-
-const trustProfile = [
-  { label: "Identity verified", value: "95%" },
-  { label: "Provider verified", value: "88%" },
-  { label: "Completed bookings", value: "24" },
-  { label: "Trust events", value: "12" },
-];
-
-const safetySteps = [
-  "Account",
-  "Provider",
-  "Home",
-  "Booking",
-  "Review",
-];
-
-const faqItems = [
-  {
-    question: "What is SafeCrib?",
-    answer:
-      "SafeCrib is a student accommodation trust and verification platform. It is designed to help students discover accommodation from providers whose identity and listing information are reviewed before visibility is granted.",
-  },
-  {
-    question: "Can I browse homes without creating an account?",
-    answer:
-      "The public landing page explains the product, but accommodation discovery is designed to happen within an authenticated experience so trust can be established around users, providers, homes, and reviews.",
-  },
-  {
-    question: "How are providers verified?",
-    answer:
-      "Providers submit the information required for SafeCrib review before they are approved to publish homes. Provider verification and home verification are separate checks.",
-  },
-  {
-    question: "Does provider verification automatically verify a home?",
-    answer:
-      "No. Provider verification is one layer of trust. A home still needs to pass its own checks before it becomes discoverable to authenticated students.",
-  },
-  {
-    question: "How does SafeCrib handle suspicious listings?",
-    answer:
-      "Suspicious listings can be identified, reported, and routed for review. A report is not treated as proof of misconduct without investigation and platform review.",
-  },
-  {
-    question: "Can landlords and agents use SafeCrib?",
-    answer:
-      "Yes. Verified accommodation providers can create a provider page, submit required information, and then publish verified homes when the review process is complete.",
-  },
-];
-
-function RouteLink({
-  href,
-  className,
-  children,
-}: {
-  href: string;
-  className: string;
-  children: ReactNode;
-}) {
+function RouteLink({ href, className, children }: { href: string; className: string; children: ReactNode }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -113,27 +19,97 @@ function RouteLink({
       event.preventDefault();
       return;
     }
-
     event.preventDefault();
     startTransition(() => router.push(href));
   };
 
   return (
-    <Link
-      href={href}
-      onClick={handleClick}
-      aria-busy={isPending}
-      aria-disabled={isPending}
-      className={`${className} ${isPending ? "pointer-events-none opacity-70" : ""}`}
-    >
-      {isPending && (
-        <span
-          aria-hidden="true"
-          className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
-        />
-      )}
+    <Link href={href} onClick={handleClick} aria-busy={isPending} aria-disabled={isPending} className={`${className} ${isPending ? "pointer-events-none opacity-70" : ""}`}>
+      {isPending && <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />}
       <span>{children}</span>
     </Link>
+  );
+}
+
+function CampusIllustration() {
+  return (
+    <svg viewBox="0 0 760 570" role="img" aria-labelledby="campus-title campus-description" className="landing-campus-art h-auto w-full">
+      <title id="campus-title">A lively SafeCrib campus</title>
+      <desc id="campus-description">Illustration of a campus library, lecture hall, student lodge, shuttle stop, walking paths, trees, and students.</desc>
+      <defs>
+        <pattern id="campus-window-grid" width="30" height="34" patternUnits="userSpaceOnUse">
+          <rect x="5" y="5" width="15" height="18" rx="2" fill="#B9D9CB" />
+        </pattern>
+      </defs>
+      <path d="M46 471c56-54 118-76 191-70 76 6 110 56 194 43 72-11 121-65 223-49 27 4 47 12 64 21v118H46z" fill="#E2EEE7" />
+      <path d="M88 476c83-53 136-44 201-26 69 19 116 15 176-17 66-35 135-33 227 5" fill="none" stroke="#fff" strokeWidth="24" strokeLinecap="round" />
+      <path d="M88 476c83-53 136-44 201-26 69 19 116 15 176-17 66-35 135-33 227 5" fill="none" stroke="#BDD8CA" strokeWidth="2" strokeDasharray="4 10" strokeLinecap="round" className="campus-route" />
+
+      <g aria-hidden="true" className="campus-scene">
+        <rect x="69" y="268" width="173" height="142" rx="5" fill="#D7E8DF" />
+        <path d="M58 271 155 214l99 57z" fill="#0C7355" />
+        <path d="M76 270h159v14H76z" fill="#135C48" />
+        <rect x="88" y="292" width="137" height="103" fill="#F8FBF8" />
+        <rect x="95" y="299" width="123" height="74" fill="url(#campus-window-grid)" />
+        <path d="M80 396h150M95 383h123" stroke="#A9C8B8" strokeWidth="5" />
+        <path d="M143 379h24v31h-24z" fill="#B7D5C5" />
+        <text x="155" y="256" textAnchor="middle" fill="#fff" fontSize="11" fontWeight="700" letterSpacing="2">LIBRARY</text>
+
+        <rect x="309" y="189" width="187" height="184" rx="5" fill="#F8FBF8" stroke="#D6E5DD" strokeWidth="3" />
+        <path d="M291 196 402 131l112 65z" fill="#B8D9CA" />
+        <path d="M303 194h197v13H303z" fill="#0C7355" />
+        <rect x="327" y="220" width="151" height="93" fill="url(#campus-window-grid)" />
+        <path d="M327 325h151" stroke="#A9C8B8" strokeWidth="5" />
+        <rect x="381" y="313" width="39" height="60" fill="#D7E8DF" />
+        <path d="M388 373v-42h25v42" fill="#0C7355" />
+        <text x="402" y="183" textAnchor="middle" fill="#0C7355" fontSize="10" fontWeight="700" letterSpacing="1.8">LECTURE HALL</text>
+
+        <rect x="542" y="254" width="153" height="139" rx="5" fill="#E5EFE9" />
+        <path d="M532 258h173v13H532z" fill="#D09A59" />
+        <path d="M555 279h127v92H555z" fill="url(#campus-window-grid)" />
+        <rect x="591" y="342" width="53" height="51" fill="#B8D9CA" />
+        <path d="M607 393v-42h22v42" fill="#0C7355" />
+        <text x="618" y="247" textAnchor="middle" fill="#0C7355" fontSize="10" fontWeight="700" letterSpacing="1.5">STUDENT LODGE</text>
+
+        <path d="M512 404h113v8H512z" fill="#0C7355" />
+        <path d="M525 412v33m85-33v33" stroke="#557C6A" strokeWidth="5" />
+        <path d="M521 378h94l-11 27h-72z" fill="#D09A59" />
+        <path d="M536 388h64" stroke="#fff" strokeWidth="3" />
+        <text x="568" y="401" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="700" letterSpacing="1">SHUTTLE</text>
+
+        <g fill="#487A60">
+          <circle cx="275" cy="353" r="23" /><circle cx="273" cy="329" r="16" fill="#6E9A78" />
+          <circle cx="513" cy="295" r="25" /><circle cx="510" cy="270" r="17" fill="#6E9A78" />
+          <circle cx="713" cy="345" r="24" /><circle cx="709" cy="319" r="17" fill="#6E9A78" />
+          <circle cx="47" cy="360" r="21" /><circle cx="45" cy="338" r="15" fill="#6E9A78" />
+        </g>
+        <g stroke="#806548" strokeWidth="6" strokeLinecap="round">
+          <path d="M275 354v40M513 296v39M713 346v43M47 361v37" />
+        </g>
+
+        <g transform="translate(255 428)">
+          <circle cx="12" cy="4" r="7" fill="#B86F4B" /><path d="M5 13h14l8 26H0z" fill="#D09A59" /><path d="m5 37-4 20m16-20 8 19" stroke="#253A31" strokeWidth="5" strokeLinecap="round" />
+          <path d="m5 19-10 13m24-12 10 8" stroke="#B86F4B" strokeWidth="4" strokeLinecap="round" />
+        </g>
+        <g transform="translate(462 421)">
+          <circle cx="12" cy="4" r="7" fill="#704B3A" /><path d="M5 13h14l8 26H0z" fill="#0C7355" /><path d="m5 37-4 20m16-20 8 19" stroke="#253A31" strokeWidth="5" strokeLinecap="round" />
+          <path d="m5 19-10 13m24-12 10 8" stroke="#704B3A" strokeWidth="4" strokeLinecap="round" />
+        </g>
+        <g transform="translate(660 429)">
+          <circle cx="12" cy="4" r="7" fill="#D09A59" /><path d="M5 13h14l8 26H0z" fill="#B86F4B" /><path d="m5 37-4 20m16-20 8 19" stroke="#253A31" strokeWidth="5" strokeLinecap="round" />
+        </g>
+      </g>
+
+      <g transform="translate(84 458)" aria-hidden="true" className="campus-shuttle">
+        <rect x="0" y="0" width="93" height="40" rx="12" fill="#0C7355" />
+        <rect x="13" y="8" width="49" height="15" rx="3" fill="#CDE5D9" />
+        <rect x="68" y="11" width="16" height="12" rx="2" fill="#CDE5D9" />
+        <circle cx="21" cy="41" r="7" fill="#263B32" /><circle cx="70" cy="41" r="7" fill="#263B32" />
+        <path d="M10 29h73" stroke="#A9D8C3" strokeWidth="3" />
+      </g>
+
+
+    </svg>
   );
 }
 
@@ -141,10 +117,10 @@ export default function Home() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const accountHref = isAuthenticated ? "/dashboard" : "/signup";
-  const accountCta = isAuthenticated ? "Go to dashboard" : "Get Started";
-
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [audience, setAudience] = useState<Audience>("student");
+  const accountHref = isAuthenticated ? "/dashboard" : "/signup";
+
   useEffect(() => {
     const hasSession = Boolean(
       window.localStorage.getItem("safecrib_access_token") ||
@@ -166,729 +142,161 @@ export default function Home() {
         if (active) setSessionChecked(true);
       });
 
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [router]);
 
   useEffect(() => {
-
     const elements = document.querySelectorAll("[data-reveal]");
-
     if (!elements.length) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.12, rootMargin: "0px 0px -30px 0px" }
-    );
-
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -30px 0px" });
     elements.forEach((element) => observer.observe(element));
-
     return () => observer.disconnect();
   }, []);
 
-  const handleNavigate = () => setMenuOpen(false);
-
   if (!sessionChecked) return <PageLoader label="Checking your session" />;
 
+  const studentMode = audience === "student";
+  const handleNavigate = () => setMenuOpen(false);
+
   return (
-    <main className="flex min-h-screen w-full flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">
-      <header className="sticky top-0 z-40 rounded-[8px] border border-black/10 bg-safecrib-white">
-        <div className="mx-auto flex max-w-content items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-6 lg:px-8">
-          <SafeCribLogo height={20} />
-
-          <nav
-            aria-label="Main navigation"
-            className="hidden items-center gap-6 text-[0.7rem] font-medium text-black/60 md:flex"
-          >
-            <a href="#how-it-works" className="transition-colors hover:text-safecrib-black">
-              How It Works
-            </a>
-            <a href="#students" className="transition-colors hover:text-safecrib-black">
-              For Students
-            </a>
-            <a href="#providers" className="transition-colors hover:text-safecrib-black">
-              For Providers
-            </a>
-            <a href="#trust" className="transition-colors hover:text-safecrib-black">
-              Trust &amp; Verification
-            </a>
-            <a href="#faq" className="transition-colors hover:text-safecrib-black">
-              FAQ
-            </a>
+    <main id="top" className="min-h-screen bg-white text-safecrib-black">
+      <header className="sticky top-0 z-40 border-b border-white/15 bg-safecrib-green text-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-7">
+          <SafeCribLogo height={21} inverse />
+          <nav aria-label="Main navigation" className="hidden items-center gap-7 text-sm font-medium text-white/80 md:flex">
+            <a href="#campus" className="transition-colors hover:text-white">Campus life</a>
+            <a href="#how" className="transition-colors hover:text-white">How it works</a>
+            <a href="#providers" className="transition-colors hover:text-white">For providers</a>
           </nav>
-
-          <div className="hidden items-center gap-2 sm:gap-3 md:flex">
-            {isAuthenticated ? (
-              <RouteLink
-                href="/dashboard"
-                className="inline-flex items-center justify-center gap-2 rounded-[4px] bg-safecrib-green px-3 py-2 text-[0.72rem] font-medium text-safecrib-white transition-colors hover:bg-[#0a5f47] sm:px-4"
-              >
-                Dashboard
-              </RouteLink>
-            ) : (
-              <>
-                <RouteLink href="/login" className="inline-flex items-center gap-2 text-[0.72rem] font-medium text-black/60 transition-colors hover:text-safecrib-black">
-                  Login
-                </RouteLink>
-                <RouteLink
-                  href="/signup"
-                  className="inline-flex items-center justify-center gap-2 rounded-[4px] bg-safecrib-green px-3 py-2 text-[0.72rem] font-medium text-safecrib-white transition-colors hover:bg-[#0a5f47] sm:px-4"
-                >
-                  Get Started
-                </RouteLink>
-              </>
-            )}
+          <div className="hidden items-center gap-4 sm:flex">
+            {!isAuthenticated && <RouteLink href="/login" className="text-sm font-medium text-white/85 hover:text-white">Log in</RouteLink>}
+            <RouteLink href={accountHref} className="inline-flex items-center justify-center rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-safecrib-green transition-colors hover:bg-white/90">
+              {isAuthenticated ? "Open dashboard" : studentMode ? "Get started" : "Create provider account"}
+            </RouteLink>
           </div>
-
-          <button
-            type="button"
-            aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
-            aria-expanded={menuOpen}
-            aria-controls="mobile-navigation"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-[4px] border border-black/10 bg-safecrib-white text-safecrib-black md:hidden"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <span className="sr-only">Toggle menu</span>
-            <span className="flex flex-col gap-1.5">
-              <span className={`block h-0.5 w-4 rounded-full bg-current transition-transform ${menuOpen ? "translate-y-2 rotate-45" : ""}`} />
-              <span className={`block h-0.5 w-4 rounded-full bg-current transition-opacity ${menuOpen ? "opacity-0" : "opacity-100"}`} />
-              <span className={`block h-0.5 w-4 rounded-full bg-current transition-transform ${menuOpen ? "-translate-y-2 -rotate-45" : ""}`} />
-            </span>
+          <button type="button" aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"} aria-expanded={menuOpen} aria-controls="mobile-navigation" onClick={() => setMenuOpen((open) => !open)} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/35 text-white transition-colors hover:bg-white/10 sm:hidden">
+            <span className="flex flex-col gap-1.5" aria-hidden="true"><span className={`h-0.5 w-4 bg-current transition-transform ${menuOpen ? "translate-y-2 rotate-45" : ""}`} /><span className={`h-0.5 w-4 bg-current transition-opacity ${menuOpen ? "opacity-0" : ""}`} /><span className={`h-0.5 w-4 bg-current transition-transform ${menuOpen ? "-translate-y-2 -rotate-45" : ""}`} /></span>
           </button>
         </div>
-
-        {menuOpen && (
-          <div id="mobile-navigation" className="border-t border-black/10 bg-safecrib-white md:hidden">
-            <nav aria-label="Mobile navigation" className="mx-auto flex max-w-content flex-col gap-1 px-4 py-4 sm:px-6">
-              <a href="#how-it-works" onClick={handleNavigate} className="rounded-[4px] px-2 py-3 text-base font-medium text-safecrib-black transition-colors hover:bg-black/[0.02]">
-                How It Works
-              </a>
-              <a href="#students" onClick={handleNavigate} className="rounded-[4px] px-2 py-3 text-base font-medium text-safecrib-black transition-colors hover:bg-black/[0.02]">
-                For Students
-              </a>
-              <a href="#providers" onClick={handleNavigate} className="rounded-[4px] px-2 py-3 text-base font-medium text-safecrib-black transition-colors hover:bg-black/[0.02]">
-                For Providers
-              </a>
-              <a href="#trust" onClick={handleNavigate} className="rounded-[4px] px-2 py-3 text-base font-medium text-safecrib-black transition-colors hover:bg-black/[0.02]">
-                Trust &amp; Verification
-              </a>
-              <a href="#faq" onClick={handleNavigate} className="rounded-[4px] px-2 py-3 text-base font-medium text-safecrib-black transition-colors hover:bg-black/[0.02]">
-                FAQ
-              </a>
-
-              <div className="mt-3 space-y-2 border-t border-black/10 pt-3">
-                {isAuthenticated ? (
-                  <RouteLink href="/dashboard" className="flex items-center justify-center gap-2 rounded-[4px] bg-safecrib-green px-4 py-3 text-sm font-medium text-safecrib-white shadow-[0_10px_18px_rgba(12,115,85,0.15)]">
-                    Dashboard
-                  </RouteLink>
-                ) : (
-                  <>
-                    <RouteLink href="/login" className="flex items-center justify-center gap-2 rounded-[4px] border border-black/15 bg-safecrib-white px-4 py-3 text-sm font-medium text-safecrib-black">
-                      Login
-                    </RouteLink>
-                    <RouteLink href="/signup" className="flex items-center justify-center gap-2 rounded-[4px] bg-safecrib-green px-4 py-3 text-sm font-medium text-safecrib-white shadow-[0_10px_18px_rgba(12,115,85,0.15)]">
-                      Get Started
-                    </RouteLink>
-                  </>
-                )}
-              </div>
-            </nav>
+        {menuOpen && <nav id="mobile-navigation" aria-label="Mobile navigation" className="border-t border-white/15 px-4 py-3 text-white sm:hidden">
+          <a href="#campus" onClick={handleNavigate} className="block py-3 text-sm font-medium">Campus life</a>
+          <a href="#how" onClick={handleNavigate} className="block py-3 text-sm font-medium">How it works</a>
+          <a href="#providers" onClick={handleNavigate} className="block py-3 text-sm font-medium">For providers</a>
+          <div className="mt-2 flex gap-3 border-t border-white/15 pt-3">
+            {!isAuthenticated && <RouteLink href="/login" className="flex flex-1 items-center justify-center rounded-full border border-white/35 px-3 py-2.5 text-sm font-medium text-white">Log in</RouteLink>}
+            <RouteLink href={accountHref} className="flex flex-1 items-center justify-center rounded-full bg-white px-3 py-2.5 text-sm font-semibold text-safecrib-green">{isAuthenticated ? "Dashboard" : "Get started"}</RouteLink>
           </div>
-        )}
+        </nav>}
       </header>
 
-      <div className="flex flex-1 flex-col justify-center">
-        <section className="scroll-mt-28 pt-6 sm:pt-10 lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-10 lg:pt-14">
-          <div data-reveal className="reveal-section">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.2em] text-safecrib-green">
-              Student accommodation, built on trust
-            </p>
-
-            <h1 className="mt-3 max-w-md font-script text-[2.7rem] leading-[0.9] text-safecrib-black sm:text-[3.5rem] lg:text-[4.8rem]">
-              Find a place to live. Know who you&apos;re dealing with.
+      <section className="overflow-hidden bg-[#F1F7F3]">
+        <div className="mx-auto grid min-h-[570px] max-w-6xl items-center gap-4 px-4 pb-7 pt-8 sm:px-7 sm:pb-10 lg:min-h-[610px] lg:grid-cols-[0.92fr_1.08fr] lg:gap-0 lg:py-8">
+          <div className="landing-hero-copy relative z-10 max-w-xl py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-safecrib-green">Campus living, with more certainty</p>
+            <h1 className="mt-4 max-w-[13ch] font-display text-[2.7rem] font-semibold leading-[1.04] text-safecrib-black sm:text-5xl lg:text-[3.65rem]">
+              {studentMode ? "Find your place in campus life." : "Good homes deserve a trusted place to be found."}
             </h1>
-
-            <p className="mt-4 max-w-sm text-sm leading-6 text-black/65 sm:text-base">
-              SafeCrib helps students discover verified accommodation and gives trusted landlords and agents a clearer way to publish homes with confidence.
+            <p className="mt-5 max-w-md text-base leading-7 text-black/65">
+              {studentMode
+                ? "Explore student homes with clearer details, reviewed providers, and the campus essentials close by."
+                : "Meet students where they search. Build a verified provider profile and publish homes with clear, useful details."}
             </p>
 
-            <div className="mt-6 flex flex-col gap-3 sm:max-w-2xl sm:flex-row sm:flex-wrap">
-              <RouteLink
-                href={accountHref}
-                className="inline-flex items-center justify-center gap-2 rounded-[4px] bg-safecrib-green px-5 py-3 text-sm font-medium text-safecrib-white transition-colors hover:bg-[#0a5f47]"
-              >
-                {accountCta}
+            <div className="mt-7 inline-flex rounded-full border border-black/10 bg-white p-1" role="group" aria-label="Choose your SafeCrib experience">
+              <button type="button" aria-pressed={studentMode} onClick={() => setAudience("student")} className={`rounded-full px-4 py-2.5 text-sm font-medium transition-colors ${studentMode ? "bg-safecrib-green text-white" : "text-black/60 hover:text-safecrib-black"}`}>I&apos;m a student</button>
+              <button type="button" aria-pressed={!studentMode} onClick={() => setAudience("provider")} className={`rounded-full px-4 py-2.5 text-sm font-medium transition-colors ${!studentMode ? "bg-safecrib-green text-white" : "text-black/60 hover:text-safecrib-black"}`}>I&apos;m a provider</button>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <RouteLink href={accountHref} className="inline-flex min-h-12 items-center justify-center rounded-full bg-safecrib-green px-5 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 hover:bg-[#095E47]">
+                {isAuthenticated ? "Go to your dashboard" : studentMode ? "Find a home" : "Start a provider profile"}
               </RouteLink>
-              <a
-                href="#how-it-works"
-                className="inline-flex items-center justify-center rounded-[4px] border border-black/15 bg-safecrib-white px-5 py-3 text-sm font-medium text-safecrib-black transition-colors hover:border-black/25 hover:bg-black/[0.02]"
-              >
-                How SafeCrib Works
-              </a>
-              <InstallButton />
+              {!studentMode && <a href="#providers" className="px-2 py-2 text-sm font-medium text-safecrib-green underline decoration-black/20 underline-offset-4">See how provider checks work</a>}
+              {studentMode && <InstallButton />}
             </div>
 
-            <div className="mt-6 flex flex-wrap gap-2 text-[0.68rem] text-black/60">
-              <span className="rounded-full border border-black/10 bg-black/[0.02] px-2.5 py-1.5">Verified homes</span>
-              <span className="rounded-full border border-black/10 bg-black/[0.02] px-2.5 py-1.5">Clear trust checks</span>
-              <span className="rounded-full border border-black/10 bg-black/[0.02] px-2.5 py-1.5">Student-first</span>
+            <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 border-t border-black/10 pt-4 text-xs font-medium text-black/55">
+              <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-safecrib-green" /> Reviewed home details</span>
+              <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[#D09A59]" /> Campus-aware search</span>
             </div>
           </div>
-
-          <div data-reveal className="reveal-section mt-8 lg:mt-0">
-            <div className="safecrib-ambient-card rounded-[10px] border border-black/10 bg-safecrib-white p-4 shadow-[0_10px_24px_rgba(11,12,14,0.03)] sm:p-5">
-              <div className="flex items-start justify-between gap-3 border-b border-black/10 pb-3">
-                <div>
-                  <p className="text-[0.62rem] font-medium uppercase tracking-[0.16em] text-black/45">
-                    Property preview
-                  </p>
-                  <h2 className="mt-2 font-display text-[1.7rem] leading-none text-safecrib-black">
-                    North Hall
-                  </h2>
-                </div>
-
-                <span className="inline-flex items-center rounded-full border border-[#A9E0CD] bg-[#EAF7F1] px-2 py-1 text-[0.6rem] font-medium uppercase tracking-[0.12em] text-safecrib-green">
-                  Verified
-                </span>
-              </div>
-
-              <div className="relative mt-4 h-52 overflow-hidden rounded-[6px] border border-black/10 bg-[#EDF3F0]">
-                <Image
-                  src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=85"
-                  alt="Verified home exterior"
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 42vw"
-                  className="object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-                <span className="absolute bottom-3 left-3 rounded-full border border-white/30 bg-black/35 px-2 py-1 text-[0.6rem] font-medium uppercase tracking-[0.12em] text-white backdrop-blur-sm">
-                  Verified home
-                </span>
-              </div>
-
-              <div className="mt-4 space-y-2.5 text-sm text-black/70">
-                <div className="flex items-center justify-between border-b border-black/10 pb-2">
-                  <span>Landlord identity</span>
-                  <span className="font-medium text-safecrib-green">Confirmed</span>
-                </div>
-                <div className="flex items-center justify-between border-b border-black/10 pb-2">
-                  <span>Safety checks</span>
-                  <span className="font-medium text-safecrib-green">Passed</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Documents</span>
-                  <span className="font-medium text-black/60">Shared</span>
-                </div>
-              </div>
+          <div className="landing-campus relative -mx-2 mt-1 lg:mx-0 lg:mt-0">
+            <CampusIllustration />
+            <div className="absolute bottom-5 left-3 hidden border-l-2 border-safecrib-green pl-3 text-xs leading-5 text-black/55 sm:block lg:bottom-8 lg:left-1">
+              <span className="block font-semibold text-safecrib-black">A campus is more than a pin.</span>
+              Walkways, study spots, and places to land.
             </div>
-          </div>
-        </section>
-
-        <section id="trust" className="pt-12 sm:pt-14">
-          <div data-reveal className="reveal-section max-w-xl">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-              The problem
-            </p>
-            <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.7rem]">
-              Finding accommodation shouldn&apos;t mean gambling on trust.
-            </h2>
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {problems.map((item, index) => (
-              <article
-                key={item.title}
-                data-reveal
-                className="reveal-section rounded-[8px] border border-black/10 bg-black/[0.01] p-4"
-                style={{ transitionDelay: `${index * 80}ms` }}
-              >
-                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-safecrib-white text-base font-medium text-safecrib-green">
-                  {index + 1}
-                </div>
-                <h3 className="mt-4 text-lg font-medium text-safecrib-black">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-black/65">{item.text}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="pt-12 sm:pt-16">
-          <div data-reveal className="reveal-section max-w-xl">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-              SafeCrib&apos;s answer
-            </p>
-            <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.8rem]">
-              We verify before we show.
-            </h2>
-          </div>
-
-          <div className="mt-6 overflow-hidden rounded-[10px] border border-black/10 bg-[#F8F9F7] p-4 sm:p-6">
-            <div className="safecrib-trust-flow grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
-              {verificationFlow.map((step, index) => (
-                <div key={step} data-reveal className="reveal-section flex items-center justify-center">
-                  <div
-                    className={`safecrib-trust-node flex h-20 w-full items-center justify-center rounded-[8px] border px-3 text-center text-[0.7rem] font-medium uppercase tracking-[0.12em] ${
-                      index === verificationFlow.length - 1
-                        ? "border-safecrib-green bg-[#EAF7F1] text-safecrib-green"
-                        : "border-black/10 bg-safecrib-white text-black/70"
-                    }`}
-                  >
-                    {step}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="how-it-works" className="scroll-mt-28 pt-12 sm:pt-16">
-          <div data-reveal className="reveal-section max-w-xl">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-              How it works
-            </p>
-            <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.8rem]">
-              A clearer path for students and providers.
-            </h2>
-          </div>
-
-          <div className="mt-6 grid gap-5 lg:grid-cols-2">
-            <div data-reveal className="reveal-section rounded-[10px] border border-black/10 bg-safecrib-white p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="font-display text-[1.8rem] text-safecrib-black">For students</h3>
-                <span className="text-[0.6rem] font-medium uppercase tracking-[0.16em] text-safecrib-green">
-                  Discover safely
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {studentSteps.map((step, index) => (
-                  <div key={step.title} className="flex gap-3 rounded-[8px] border border-black/10 bg-black/[0.01] p-3">
-                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#EAF7F1] text-[0.7rem] font-medium text-safecrib-green">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="font-medium text-safecrib-black">{step.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-black/65">{step.text}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div data-reveal className="reveal-section rounded-[10px] border border-black/10 bg-[#F8F9F7] p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="font-display text-[1.8rem] text-safecrib-black">For providers</h3>
-                <span className="text-[0.6rem] font-medium uppercase tracking-[0.16em] text-safecrib-green">
-                  Publish responsibly
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {providerSteps.map((step, index) => (
-                  <div key={step.title} className="flex gap-3 rounded-[8px] border border-black/10 bg-safecrib-white p-3">
-                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#EAF7F1] text-[0.7rem] font-medium text-safecrib-green">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="font-medium text-safecrib-black">{step.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-black/65">{step.text}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="pt-12 sm:pt-16">
-          <div data-reveal className="reveal-section max-w-xl">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-              Marketplace preview
-            </p>
-            <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.8rem]">
-              See the difference before you book.
-            </h2>
-          </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            {marketplaceCards.map((listing, index) => (
-              <article
-                key={listing.name}
-                data-reveal
-                className="reveal-section rounded-[10px] border border-black/10 bg-safecrib-white p-3 shadow-[0_8px_20px_rgba(11,12,14,0.02)]"
-                style={{ transitionDelay: `${index * 100}ms` }}
-              >
-                <div className="relative h-36 overflow-hidden rounded-[8px] border border-black/10 bg-[#EDF3F0] p-4">
-                  <Image
-                    src={listing.image}
-                    alt={`${listing.name} accommodation preview`}
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 33vw"
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-                  <div className="rounded-full border border-black/10 bg-safecrib-white/80 px-2 py-1 text-[0.6rem] font-medium uppercase tracking-[0.12em] text-safecrib-green">
-                    {listing.status}
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs text-black/50">{listing.area}</p>
-                      <h3 className="mt-1 font-display text-[1.5rem] text-safecrib-black">{listing.name}</h3>
-                    </div>
-                    <span className="rounded-full border border-[#A9E0CD] bg-[#EAF7F1] px-2 py-1 text-[0.56rem] font-medium uppercase tracking-[0.12em] text-safecrib-green">
-                      Verified
-                    </span>
-                  </div>
-
-                  <div className="mt-4 space-y-2 text-sm text-black/70">
-                    <div className="flex items-center justify-between border-b border-black/10 pb-2">
-                      <span>Price</span>
-                      <span className="font-medium text-safecrib-black">{listing.price}</span>
-                    </div>
-                    <div className="flex items-center justify-between border-b border-black/10 pb-2">
-                      <span>Distance</span>
-                      <span className="font-medium text-safecrib-black">{listing.distance}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Review</span>
-                      <span className="font-medium text-safecrib-green">{listing.review}</span>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section id="trust-profile" className="scroll-mt-28 pt-12 sm:pt-16">
-          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-            <div data-reveal className="reveal-section">
-              <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-                Trust profile
-              </p>
-              <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.8rem]">
-                Trust should be explainable.
-              </h2>
-              <p className="mt-4 max-w-md text-base leading-7 text-black/65">
-                SafeCrib builds trust from verifiable platform activity — not just claims. A provider profile is more useful when the underlying evidence is clear.
-              </p>
-            </div>
-
-            <div data-reveal className="reveal-section rounded-[12px] border border-black/10 bg-[#F8F9F7] p-5 shadow-[0_10px_24px_rgba(11,12,14,0.02)]">
-              <div className="flex items-start justify-between gap-3 border-b border-black/10 pb-3">
-                <div>
-                  <p className="text-[0.62rem] font-medium uppercase tracking-[0.14em] text-black/45">Provider profile</p>
-                  <h3 className="mt-2 font-display text-[1.9rem] text-safecrib-black">Aisha Homes</h3>
-                </div>
-                <span className="inline-flex items-center rounded-full border border-[#A9E0CD] bg-[#EAF7F1] px-2 py-1 text-[0.6rem] font-medium uppercase tracking-[0.12em] text-safecrib-green">
-                  Verified
-                </span>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2 text-[0.62rem] font-medium uppercase tracking-[0.12em] text-safecrib-green">
-                <span className="rounded-full border border-[#A9E0CD] bg-[#EAF7F1] px-2.5 py-1.5">Identity verified</span>
-                <span className="rounded-full border border-[#A9E0CD] bg-[#EAF7F1] px-2.5 py-1.5">Provider verified</span>
-                <span className="rounded-full border border-[#A9E0CD] bg-[#EAF7F1] px-2.5 py-1.5">Review ready</span>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {trustProfile.map((item) => (
-                  <div key={item.label} className="rounded-[8px] border border-black/10 bg-safecrib-white p-3 shadow-[0_2px_10px_rgba(11,12,14,0.02)]">
-                    <p className="text-[0.62rem] font-medium uppercase tracking-[0.14em] text-black/45">{item.label}</p>
-                    <p className="mt-2 font-display text-[1.9rem] leading-none text-safecrib-black">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="providers" className="scroll-mt-28 pt-12 sm:pt-16">
-          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-            <div data-reveal className="reveal-section">
-              <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-                For providers
-              </p>
-              <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.8rem]">
-                A trusted place to publish your homes.
-              </h2>
-              <p className="mt-4 max-w-md text-base leading-7 text-black/65">
-                SafeCrib gives verified accommodation providers a controlled publishing workflow designed to reduce misleading listings and improve trust.
-              </p>
-
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                <RouteLink
-                  href={accountHref}
-                  className="inline-flex items-center justify-center gap-2 rounded-[4px] bg-safecrib-green px-5 py-3 text-sm font-medium text-safecrib-white transition-colors hover:bg-[#0a5f47]"
-                >
-                  {isAuthenticated ? "Open dashboard" : "Become a Provider"}
-                </RouteLink>
-                <a
-                  href="#trust"
-                  className="inline-flex items-center justify-center rounded-[4px] border border-black/15 bg-safecrib-white px-5 py-3 text-sm font-medium text-safecrib-black transition-colors hover:border-black/25 hover:bg-black/[0.02]"
-                >
-                  Learn How Verification Works
-                </a>
-              </div>
-            </div>
-
-            <div data-reveal className="reveal-section overflow-hidden rounded-[10px] border border-black/10 bg-[#F8F9F7] p-5">
-              <div className="relative mb-5 h-40 overflow-hidden rounded-[8px] border border-black/10">
-                <Image
-                  src={providerImage}
-                  alt="Bright accommodation managed by a provider"
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 45vw"
-                  className="object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-                <span className="absolute bottom-3 left-3 text-xs font-medium text-white">Provider portfolio</span>
-              </div>
-              <div className="space-y-3">
-                {providerSteps.map((step, index) => (
-                  <div key={step.title} className="flex items-start gap-3 rounded-[8px] border border-black/10 bg-safecrib-white p-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EAF7F1] text-[0.7rem] font-medium text-safecrib-green">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="font-medium text-safecrib-black">{step.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-black/65">{step.text}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="students" className="scroll-mt-28 pt-12 sm:pt-16">
-          <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-            <div data-reveal className="reveal-section rounded-[10px] border border-black/10 bg-[#F8F9F7] p-5">
-              <div className="space-y-3">
-                {studentSteps.map((step, index) => (
-                  <div key={step.title} className="flex items-start gap-3 rounded-[8px] border border-black/10 bg-safecrib-white p-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EAF7F1] text-[0.7rem] font-medium text-safecrib-green">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="font-medium text-safecrib-black">{step.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-black/65">{step.text}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div data-reveal className="reveal-section">
-              <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-                For students
-              </p>
-              <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.8rem]">
-                Accommodation discovery without the guesswork.
-              </h2>
-              <p className="mt-4 max-w-md text-base leading-7 text-black/65">
-                SafeCrib is built to help students compare homes with clearer signals, better context, and greater confidence before they commit.
-              </p>
-
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                <RouteLink
-                  href={accountHref}
-                  className="inline-flex items-center justify-center gap-2 rounded-[4px] bg-safecrib-green px-5 py-3 text-sm font-medium text-safecrib-white transition-colors hover:bg-[#0a5f47]"
-                >
-                  {isAuthenticated ? "Explore dashboard" : "Find Your Next Home"}
-                </RouteLink>
-                <a
-                  href="#faq"
-                  className="inline-flex items-center justify-center rounded-[4px] border border-black/15 bg-safecrib-white px-5 py-3 text-sm font-medium text-safecrib-black transition-colors hover:border-black/25 hover:bg-black/[0.02]"
-                >
-                  Learn More
-                </a>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="pt-12 sm:pt-16">
-          <div data-reveal className="reveal-section max-w-xl">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-              Safety and verification
-            </p>
-            <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.8rem]">
-              Every layer has a checkpoint.
-            </h2>
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-5">
-            {safetySteps.map((step, index) => (
-              <div key={step} data-reveal className="reveal-section flex items-center justify-center">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full border border-black/10 bg-safecrib-white text-sm font-medium text-safecrib-black shadow-[0_4px_14px_rgba(11,12,14,0.04)]">
-                    {index + 1}
-                  </div>
-                  <span className="text-[0.64rem] font-medium uppercase tracking-[0.16em] text-black/50">{step}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-5 rounded-[10px] border border-black/10 bg-[#F8F9F7] p-5 text-sm leading-7 text-black/65">
-            SafeCrib is designed to create an auditable trust trail across account verification, provider checks, home review, booking protection, and post-booking review. This supports a safer accommodation experience without depending on vague claims or empty trust messaging.
-          </div>
-        </section>
-
-        <section className="pt-12 sm:pt-16">
-          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-            <div data-reveal className="reveal-section">
-              <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-                Authentication before discovery
-              </p>
-              <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.8rem]">
-                Discovery happens in context.
-              </h2>
-              <p className="mt-4 max-w-md text-base leading-7 text-black/65">
-                SafeCrib is designed as an authenticated marketplace experience so the platform can establish a trusted environment around users, providers, homes, and reviews.
-              </p>
-            </div>
-
-            <div data-reveal className="reveal-section rounded-[12px] border border-black/10 bg-safecrib-white p-5 shadow-[0_12px_28px_rgba(11,12,14,0.03)]">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-[8px] border border-black/10 bg-[#F8F9F7] p-3">
-                  <p className="text-[0.62rem] font-medium uppercase tracking-[0.16em] text-black/45">Public</p>
-                  <p className="mt-3 text-sm leading-6 text-black/70">Landing page</p>
-                </div>
-                <div className="rounded-[8px] border border-black/10 bg-[#EAF7F1] p-3">
-                  <p className="text-[0.62rem] font-medium uppercase tracking-[0.16em] text-safecrib-green">Sign up</p>
-                  <p className="mt-3 text-sm leading-6 text-safecrib-black">Authenticate</p>
-                </div>
-                <div className="rounded-[8px] border border-black/10 bg-[#F8F9F7] p-3">
-                  <p className="text-[0.62rem] font-medium uppercase tracking-[0.16em] text-black/45">Dashboard</p>
-                  <p className="mt-3 text-sm leading-6 text-black/70">Discover + book</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="pt-12 sm:pt-16">
-          <div data-reveal className="reveal-section rounded-[10px] border border-black/10 bg-[#F8F9F7] p-5 sm:p-6">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-              Future capability
-            </p>
-            <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.8rem]">
-              Closer isn&apos;t always better.
-            </h2>
-            <p className="mt-4 max-w-xl text-base leading-7 text-black/65">
-              SafeCrib is designed to support smarter accommodation discovery by helping students understand realistic commute time to campus, faculty, and daily routines — not just straight-line distance.
-            </p>
-          </div>
-        </section>
-
-        <section id="faq" className="scroll-mt-28 pt-12 sm:pt-16">
-          <div data-reveal className="reveal-section max-w-xl">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-              FAQ
-            </p>
-            <h2 className="mt-3 font-display text-[2.1rem] leading-none text-safecrib-black sm:text-[2.8rem]">
-              Questions students and providers ask before they trust a platform.
-            </h2>
-          </div>
-
-          <div className="mt-6 space-y-3">
-            {faqItems.map((faqItem, index) => (
-              <details
-                key={faqItem.question}
-                open={index === 0}
-                className="safecrib-accordion reveal-section rounded-[8px] border border-black/10 bg-safecrib-white p-4"
-                data-reveal
-              >
-                <summary className="cursor-pointer list-none text-base font-medium text-safecrib-black">
-                  {faqItem.question}
-                </summary>
-                <p className="mt-3 text-sm leading-7 text-black/65">{faqItem.answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-
-        <section id="final-cta" className="scroll-mt-28 pt-12 sm:pt-16">
-          <div data-reveal className="reveal-section rounded-[12px] border border-black/10 bg-[#F6F8F7] p-5 sm:p-8">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-xl">
-                <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-safecrib-green">
-                  The next step
-                </p>
-                <h2 className="mt-3 font-display text-[2.15rem] leading-none text-safecrib-black sm:text-[2.7rem]">
-                  Accommodation should feel like a decision, not a gamble.
-                </h2>
-                <p className="mt-3 text-base leading-7 text-black/65">
-                  SafeCrib is building a more trusted way for students to discover accommodation and for verified providers to publish homes with clarity.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <RouteLink
-                  href={accountHref}
-                  className="inline-flex items-center justify-center gap-2 rounded-[4px] bg-safecrib-green px-5 py-3 text-sm font-medium text-safecrib-white transition-colors hover:bg-[#0a5f47]"
-                >
-                  {accountCta}
-                </RouteLink>
-                <NotificationForm />
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <footer className="mt-12 border-t border-black/10 pt-8">
-        <div className="mx-auto max-w-content px-4 pb-8 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <SafeCribLogo height={18} />
-              <p className="mt-3 max-w-sm text-sm leading-6 text-black/60">
-                SafeCrib is building a safer, clearer way for students and verified providers to navigate accommodation.
-              </p>
-            </div>
-
-            <div className="grid gap-3 text-sm text-black/65 sm:grid-cols-3">
-              <div>
-                <p className="text-[0.62rem] font-medium uppercase tracking-[0.16em] text-black/45">Product</p>
-                <ul className="mt-2 space-y-2">
-                  <li><a href="#how-it-works" className="hover:text-safecrib-black">How It Works</a></li>
-                  <li><a href="#trust" className="hover:text-safecrib-black">Trust &amp; Verification</a></li>
-                </ul>
-              </div>
-              <div>
-                <p className="text-[0.62rem] font-medium uppercase tracking-[0.16em] text-black/45">For users</p>
-                <ul className="mt-2 space-y-2">
-                  <li><a href="#students" className="hover:text-safecrib-black">For Students</a></li>
-                  <li><a href="#providers" className="hover:text-safecrib-black">For Providers</a></li>
-                </ul>
-              </div>
-              <div>
-                <p className="text-[0.62rem] font-medium uppercase tracking-[0.16em] text-black/45">Support</p>
-                <ul className="mt-2 space-y-2">
-                  <li><a href="#faq" className="hover:text-safecrib-black">FAQ</a></li>
-                  <li><a href="#final-cta" className="hover:text-safecrib-black">Get Started</a></li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 border-t border-black/10 pt-4 text-[0.68rem] uppercase tracking-[0.12em] text-black/45">
-            © 2026 SafeCrib
           </div>
         </div>
+      </section>
+
+      <section id="campus" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-14 sm:px-7 sm:py-16">
+        <div className="grid gap-8 md:grid-cols-[0.85fr_1.15fr] md:items-end">
+          <div data-reveal>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-safecrib-green">Made for campus days</p>
+            <h2 className="mt-3 max-w-md font-display text-3xl font-semibold leading-tight sm:text-4xl">From first lecture to lights out.</h2>
+          </div>
+          <p className="max-w-xl text-base leading-7 text-black/60" data-reveal>
+            Find a home that fits the way you study, move, and recharge. SafeCrib keeps home details and provider checks in view, so you can make a more informed choice.
+          </p>
+        </div>
+        <div className="mt-9 grid border-y border-black/10 sm:grid-cols-3" data-reveal>
+          <div className="flex gap-4 border-b border-black/10 py-5 sm:border-b-0 sm:border-r sm:pr-5">
+            <svg aria-hidden="true" viewBox="0 0 40 40" className="h-9 w-9 shrink-0 text-safecrib-green" fill="none"><path d="M5 16 20 7l15 9v18H5zM10 17h20M13 20v9m7-9v9m7-9v9M3 34h34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <div><h3 className="font-semibold">Study close</h3><p className="mt-1 text-sm leading-6 text-black/55">Compare home details with campus life in mind.</p></div>
+          </div>
+          <div className="flex gap-4 border-b border-black/10 py-5 sm:border-b-0 sm:border-r sm:px-5">
+            <svg aria-hidden="true" viewBox="0 0 40 40" className="h-9 w-9 shrink-0 text-safecrib-green" fill="none"><path d="M6 11h28v19H6zM10 30v4m20-4v4M11 17h18M11 22h8m-8 4h13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="29" cy="26" r="1.5" fill="currentColor" /></svg>
+            <div><h3 className="font-semibold">Move with ease</h3><p className="mt-1 text-sm leading-6 text-black/55">Keep transport and everyday routes part of the search.</p></div>
+          </div>
+          <div className="flex gap-4 py-5 sm:pl-5">
+            <svg aria-hidden="true" viewBox="0 0 40 40" className="h-9 w-9 shrink-0 text-safecrib-green" fill="none"><path d="M20 5 32 10v9c0 8-5 13-12 16C13 32 8 27 8 19v-9z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="m14 20 4 4 8-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <div><h3 className="font-semibold">Know who&apos;s hosting</h3><p className="mt-1 text-sm leading-6 text-black/55">See which providers and homes have been reviewed.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="how" className="scroll-mt-24 border-y border-black/10 bg-[#F8FAF8]">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-7 sm:py-16">
+          <div className="flex flex-wrap items-end justify-between gap-5" data-reveal>
+            <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-safecrib-green">A clear path</p><h2 className="mt-3 font-display text-3xl font-semibold sm:text-4xl">Trust, built in steps.</h2></div>
+            <p className="max-w-sm text-sm leading-6 text-black/55">Reviews are part of the journey, not a promise hidden in the small print.</p>
+          </div>
+          <ol className="mt-8 grid gap-0 sm:grid-cols-3" data-reveal>
+            {[
+              { n: "01", title: "Create your account", text: "Join SafeCrib and tell us whether you are looking for a home or sharing one." },
+              { n: "02", title: "Get verified", text: "Student profiles and provider Pages go through admin review before their verified status appears." },
+              { n: "03", title: "Make your next move", text: "Students explore reviewed homes. Approved providers manage and submit their listings." },
+            ].map((step, index) => <li key={step.n} className={`py-5 sm:py-2 ${index > 0 ? "border-t border-black/10 sm:border-l sm:border-t-0 sm:pl-6" : "sm:pr-6"} ${index === 1 ? "sm:px-6" : ""}`}>
+              <span className="font-display text-3xl font-semibold text-safecrib-green">{step.n}</span><h3 className="mt-4 font-semibold">{step.title}</h3><p className="mt-2 max-w-xs text-sm leading-6 text-black/55">{step.text}</p>
+            </li>)}
+          </ol>
+        </div>
+      </section>
+
+      <section id="providers" className="mx-auto grid max-w-6xl scroll-mt-24 gap-8 px-4 py-14 sm:px-7 sm:py-16 md:grid-cols-[1fr_auto] md:items-center" data-reveal>
+        <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-safecrib-green">For agents and landlords</p><h2 className="mt-3 max-w-xl font-display text-3xl font-semibold leading-tight sm:text-4xl">Put good homes on the right path.</h2><p className="mt-3 max-w-xl text-base leading-7 text-black/60">Create a provider Page, complete review, then manage homes through a clear submission process.</p></div>
+        <RouteLink href={accountHref} className="inline-flex min-h-12 items-center justify-center rounded-full border border-safecrib-green px-5 py-3 text-sm font-semibold text-safecrib-green transition-colors hover:bg-[#EAF7F1]">{isAuthenticated ? "Open dashboard" : "Start as a provider"}</RouteLink>
+      </section>
+
+      <section className="border-t border-black/10 bg-[#F1F7F3]">
+        <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-10 sm:px-7 md:flex-row md:items-center md:justify-between" data-reveal>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-safecrib-green">Your next chapter starts here</p><h2 className="mt-2 font-display text-2xl font-semibold">Find your place with SafeCrib.</h2></div>
+          <div className="flex flex-wrap items-center gap-3"><InstallButton /><RouteLink href={accountHref} className="inline-flex min-h-11 items-center justify-center rounded-full bg-safecrib-green px-5 py-3 text-sm font-semibold text-white hover:bg-[#095E47]">{isAuthenticated ? "Open dashboard" : "Get started"}</RouteLink></div>
+        </div>
+      </section>
+
+      <footer className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6 text-xs text-black/50 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+        <SafeCribLogo height={18} />
+        <p>Student accommodation, with trust built into the journey.</p>
+        <a href="#top" className="font-medium text-safecrib-green hover:underline">Back to top</a>
       </footer>
     </main>
   );

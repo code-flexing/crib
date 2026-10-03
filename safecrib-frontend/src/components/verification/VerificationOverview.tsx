@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, apiFetch, cachedApiFetch, cachedCurrentUser, getCachedCurrentUser, primeCurrentUserCache, unwrapData } from "@/lib/api";
+import { ApiError, apiFetch, cachedApiFetch, getCurrentUser, primeCurrentUserCache, unwrapData } from "@/lib/api";
 import { criterionLabel, normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
 
 type Identity = { id?: string; identityVerified?: boolean; role?: string; trustScore?: number; verificationStage?: unknown };
@@ -24,9 +24,7 @@ function identityState(identity: Identity, verification: VerificationStageResult
 }
 
 export function VerificationOverview() {
-  const [verification, setVerification] = useState<VerificationStageResult | null>(() =>
-    normalizeVerificationStage(getCachedCurrentUser<Identity>()?.verificationStage),
-  );
+  const [verification, setVerification] = useState<VerificationStageResult | null>(null);
   const [trustScore, setTrustScore] = useState<number | null>(null);
   const [identityVerified, setIdentityVerified] = useState<boolean | null>(null);
   const [providerStatus, setProviderStatus] = useState<string | null>(null);
@@ -41,15 +39,12 @@ export function VerificationOverview() {
     setError("");
     setDiscoveryError("");
     setEligible(null);
+    setVerification(null);
     let identity: Identity;
     try {
-      const currentIdentity = unwrapData<Identity>(await (refresh
-        ? apiFetch<unknown>("/api/v1/users/me")
-        : cachedCurrentUser<Identity>()));
+      const currentIdentity = await getCurrentUser<Identity>();
       identity = currentIdentity;
       if (refresh) primeCurrentUserCache(currentIdentity);
-      const profileStage = normalizeVerificationStage(currentIdentity.verificationStage);
-      if (profileStage) setVerification(profileStage);
     } catch (identityError) {
       setError(identityError instanceof Error ? identityError.message : "We could not load your account status.");
       setVerification(null);
@@ -69,12 +64,9 @@ export function VerificationOverview() {
 
     setEligible(true);
     const fetch = refresh ? apiFetch : cachedApiFetch;
-    const profileStage = normalizeVerificationStage(identity.verificationStage);
     const isProvider = ["AGENT", "LANDLORD"].includes(String(identity.role ?? "").toUpperCase());
     const results = await Promise.allSettled([
-      profileStage && !refresh
-        ? Promise.resolve(profileStage)
-        : fetch<unknown>("/api/v1/trust/me/verification-stage"),
+      apiFetch<unknown>("/api/v1/trust/me/verification-stage"),
       fetch<unknown>("/api/v1/trust/me"),
       fetch<unknown>("/api/v1/provider-pages/me"),
       isProvider && identity.id
@@ -168,7 +160,7 @@ export function VerificationOverview() {
             </div>;
           })()}
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div><p className="text-xs uppercase tracking-[0.14em] text-black/45">Current stage</p><div className="mt-2">{verification.eligible ? <VerificationBadge verification={verification} compact /> : <p className="text-sm font-medium text-black/65">Awaiting admin approval</p>}</div></div>
+            <div><p className="text-xs uppercase tracking-[0.14em] text-black/45">Current stage</p><div className="mt-2">{verification.eligible ? <VerificationBadge verification={verification} compact iconOnly /> : <p className="text-sm font-medium text-black/65">Awaiting admin approval</p>}</div></div>
             <p className="text-sm text-black/55">{verification.eligible ? verification.stage.replaceAll("_", " ").toLowerCase() : "Not yet verified"}</p>
           </div>
           {verification.riskBlocked && <p className="mt-5 border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm leading-6 text-[#7A4B00]">An account review is limiting badge upgrades. Your displayed badge remains at the standard verified level.</p>}

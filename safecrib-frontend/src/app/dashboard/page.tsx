@@ -56,7 +56,6 @@ export default function DashboardPage() {
     const cachedProfile = getCachedCurrentUser<Profile>();
     if (cachedProfile) {
       setProfile({ ...cachedProfile, displayName: resolveAccountName(cachedProfile) });
-      setVerification(normalizeVerificationStage(cachedProfile.verificationStage));
     }
     else {
       const tokenName = getAuthenticatedDisplayName();
@@ -68,8 +67,6 @@ export default function DashboardPage() {
       if (!displayName(user)) user = { ...user, displayName: resolveAccountName(user) };
       primeCurrentUserCache(user);
       setProfile({ ...user, displayName: displayName(user) || getAuthenticatedDisplayName() });
-      const currentStage = normalizeVerificationStage(user.verificationStage);
-      if (currentStage) setVerification(currentStage);
       const role = String(user.role ?? "").toUpperCase();
       if (["AGENT", "LANDLORD"].includes(role) && user.id) {
         const today = new Date().toISOString().slice(0, 10);
@@ -82,12 +79,12 @@ export default function DashboardPage() {
       }
       const studentMode = ["STUDENT", "UNVERIFIED"].includes(role);
       const verificationRequest = ["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)
-        ? cachedApiFetch<unknown>("/api/v1/trust/me/verification-stage")
+        ? apiFetch<unknown>("/api/v1/trust/me/verification-stage")
             .then(normalizeVerificationStage)
             .catch(() => null)
         : Promise.resolve(null);
       void verificationRequest.then((stage) => {
-        if (stage) setVerification(stage);
+        setVerification(stage);
       });
       const [studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, recommendations] = await Promise.all([
         studentMode ? cachedApiFetch<StudentProfile>("/api/v1/student-profiles/me").catch(() => null) : Promise.resolve(null),

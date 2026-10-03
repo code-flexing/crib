@@ -9,7 +9,7 @@ import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { PageLoader } from "@/components/loading/PageLoader";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { cachedApiFetch, cachedCurrentUser, clearSession, displayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, resolveMediaUrl, unwrapData } from "@/lib/api";
+import { apiFetch, cachedApiFetch, clearSession, displayName, getCachedCurrentUser, getCurrentUser, isUnauthorizedError, normalizeAccountStatus, resolveMediaUrl, unwrapData } from "@/lib/api";
 
 type User = {
   id?: string;
@@ -146,24 +146,21 @@ export default function ProfilePage() {
     const cachedUser = getCachedCurrentUser<User>();
     if (cachedUser) {
       setUser(cachedUser);
-      setVerification(normalizeVerificationStage(cachedUser.verificationStage));
       setLoading(false);
     }
 
     let active = true;
-    void cachedCurrentUser<User>().then(async (currentUser) => {
+    void getCurrentUser<User>().then(async (currentUser) => {
       if (!active) return;
       setUser(currentUser);
-      const currentStage = normalizeVerificationStage(currentUser.verificationStage);
-      if (currentStage) setVerification(currentStage);
       const role = String(currentUser.role ?? "").toUpperCase();
       const verificationRequest = ["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)
-        ? cachedApiFetch<unknown>("/api/v1/trust/me/verification-stage")
+        ? apiFetch<unknown>("/api/v1/trust/me/verification-stage")
             .then(normalizeVerificationStage)
             .catch(() => null)
-        : Promise.resolve(normalizeVerificationStage(currentUser.verificationStage));
+        : Promise.resolve(null);
       void verificationRequest.then((stage) => {
-        if (active && stage) setVerification(stage);
+        if (active) setVerification(stage);
       });
       const isStudent = ["UNVERIFIED", "STUDENT"].includes(role);
       const isProvider = ["AGENT", "LANDLORD"].includes(role);
@@ -233,7 +230,7 @@ export default function ProfilePage() {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-3">
                   <h1 id="profile-heading" className="break-words font-display text-3xl font-bold tracking-tight text-white sm:text-5xl">{name}</h1>
-                  {verification && <VerificationBadge verification={verification} compact />}
+                  {verification && <VerificationBadge verification={verification} compact iconOnly />}
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-white/60"><span className="text-[#a8e7cb]">{accountLabel}</span><span aria-hidden="true">/</span>{dateLabel(user?.createdAt) && <span>Member since {dateLabel(user?.createdAt)}</span>}</div>
               </div>

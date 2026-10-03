@@ -9,9 +9,9 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
-  title: "SafeCrib",
+  title: "SafeCrib | Campus living, with more certainty",
   description:
-    "SafeCrib is a student accommodation trust and verification platform, currently under development.",
+    "Explore student homes with clearer details, reviewed providers, and campus essentials close by.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icons/icon-192.png",

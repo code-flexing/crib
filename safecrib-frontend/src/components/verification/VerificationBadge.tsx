@@ -78,21 +78,7 @@ export function normalizeVerificationStage(value: unknown): VerificationStageRes
   return {
     userId: typeof response.userId === "string" ? response.userId : undefined,
     role: typeof response.role === "string" ? response.role : undefined,
-    eligible: response.eligible === true || (
-      response.eligible !== false &&
-      Array.isArray(response.criteria) &&
-      response.criteria.some((item) => {
-        const criterion = recordValue(item);
-        return criterion.key === "identity" && criterion.met === true;
-      }) &&
-      response.criteria.some((item) => {
-        const criterion = recordValue(item);
-        const role = String(response.role ?? "").toUpperCase();
-        return (role === "STUDENT" && criterion.key === "student" && criterion.met === true)
-          || (["AGENT", "LANDLORD"].includes(role) && criterion.key === "provider" && criterion.met === true)
-          || (role === "ADMIN" && criterion.key === "identity" && criterion.met === true);
-      })
-    ),
+    eligible: response.eligible === true,
     stage,
     badge: config.badge,
     badgeColor: config.color,
@@ -112,9 +98,9 @@ export function VerificationBadge({ verification, compact = false, iconOnly = fa
     <span
       title={`${config.label}${verification.riskBlocked ? ". Advanced badge upgrade is blocked for review." : ""}`}
       aria-label={`${config.label}${verification.riskBlocked ? ", risk review required" : ""}`}
-      className={`inline-flex w-fit items-center gap-2 rounded-full border font-semibold ${config.tone} ${iconOnly ? "h-5 w-5 justify-center p-0" : compact ? "px-2 py-0.5 text-[0.7rem]" : "px-3 py-1.5 text-sm"}`}
+      className={`inline-flex w-fit items-center gap-2 rounded-full border font-semibold ${config.tone} ${iconOnly ? "h-4 w-4 justify-center p-0" : compact ? "px-2 py-0.5 text-[0.7rem]" : "px-3 py-1.5 text-sm"}`}
     >
-      <svg aria-hidden="true" viewBox="0 0 20 20" className={`shrink-0 ${iconOnly ? "h-3 w-3" : compact ? "h-3.5 w-3.5" : "h-4 w-4"}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg aria-hidden="true" viewBox="0 0 20 20" className={`shrink-0 ${iconOnly ? "h-2.5 w-2.5" : compact ? "h-3.5 w-3.5" : "h-4 w-4"}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         {verification.stage === "PROFILE_VERIFIED" && <path d="m4 10 4 4 8-9" />}
         {verification.stage === "AGENT_VERIFIED" && <path d="m4 10 4 4 8-9" />}
         {verification.stage === "TRUST_CROWN" && <path d="m2.5 6 4.3 3.2L10 3l3.2 6.2L17.5 6l-1.2 9H3.7L2.5 6Zm1.2 12h12.6" />}

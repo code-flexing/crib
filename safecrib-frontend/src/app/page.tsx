@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type MouseEvent, type ReactNode } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
-import { PageLoader } from "@/components/loading/PageLoader";r verification
-Verified
+import { PageLoader } from "@/components/loading/PageLoader";
 
 import { InstallButton } from "@/components/pwa/InstallButton";
 import { getCurrentUser } from "@/lib/api";

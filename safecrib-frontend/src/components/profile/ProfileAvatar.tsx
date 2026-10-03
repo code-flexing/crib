@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useState } from "react";
 
 const backgrounds = ["#DCEFE7", "#F5E3D7", "#E1E8FA", "#F4EAC6", "#F1DDE9", "#D6E9EE"];
 const skinTones = ["#F2C7A5", "#C9875E", "#E3AA82", "#8B553D", "#D99A73", "#F0D0B3"];
@@ -28,14 +31,15 @@ export function ProfileAvatar({
   size = "medium",
   className = "",
 }: ProfileAvatarProps) {
+  const [failedSource, setFailedSource] = useState<string | null>(null);
   const avatarSeed = seed?.trim() || alt;
   const index = variantIndex(avatarSeed, backgrounds.length);
   const hairStyle = variantIndex(avatarSeed, 4, 41);
   const sizeClass = size === "small" ? "h-12 w-12" : size === "large" ? "h-32 w-32" : "h-16 w-16";
   const imageClass = `${sizeClass} shrink-0 overflow-hidden rounded-full border border-black/10 ${className}`;
 
-  if (src) {
-    return <Image src={src} alt={alt} width={128} height={128} unoptimized className={`${imageClass} object-cover`} />;
+  if (src && failedSource !== src) {
+    return <Image src={src} alt={alt} width={128} height={128} unoptimized onError={() => setFailedSource(src)} className={`${imageClass} object-cover`} />;
   }
 
   return (

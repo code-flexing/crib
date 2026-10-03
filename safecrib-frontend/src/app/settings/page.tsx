@@ -8,7 +8,7 @@ import { SettingsSignOutButton } from "@/components/settings/SettingsSignOutButt
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { Button } from "@/components/ui/Button";
 import { VerificationOverview } from "@/components/verification/VerificationOverview";
-import { getCachedCurrentUser, normalizeAccountStatus, type AccountStatus } from "@/lib/api";
+import { apiFetch, clearSession, getCurrentUser, isUnauthorizedError, normalizeAccountStatus, unwrapData, type AccountStatus } from "@/lib/api";
 
 type User = {
   email?: string;
@@ -28,11 +28,27 @@ export default function SettingsPage() {
       return;
     }
 
-    const currentUser = getCachedCurrentUser<User>();
-    if (currentUser) {
+    let active = true;
+    void getCurrentUser<User>().then(async (currentUser) => {
+      if (!active) return;
       setUser(currentUser);
-      setStatus(normalizeAccountStatus(currentUser.studentProfileStatus));
-    }
+      const role = String(currentUser.role ?? "").toUpperCase();
+      if (["UNVERIFIED", "STUDENT"].includes(role)) {
+        const latestStatus = await apiFetch<unknown>("/api/v1/student-profiles/status")
+          .then(unwrapData<unknown>)
+          .then(normalizeAccountStatus)
+          .catch(() => normalizeAccountStatus(currentUser.studentProfileStatus));
+        if (active) setStatus(latestStatus);
+      } else {
+        setStatus(normalizeAccountStatus(currentUser.studentProfileStatus));
+      }
+    }).catch((loadError: unknown) => {
+      if (active && isUnauthorizedError(loadError)) {
+        clearSession();
+        router.replace("/login?reason=session-expired");
+      }
+    });
+    return () => { active = false; };
   }, [router]);
 
   const role = String(user?.role ?? "").toUpperCase();
@@ -41,7 +57,7 @@ export default function SettingsPage() {
 
   return (
     <main className="min-h-screen bg-[#f7f8f5] pb-24 md:pb-8">
-      <DashboardNav onCreatePage={() => router.push("/page/new")} pageStatus="none" />
+      <DashboardNav onCreatePage={() => router.push("/page/new")} pageStatus="none" canManagePage={["AGENT", "LANDLORD"].includes(role)} />
       <section className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-10">
         <BackHomeLink />
 
@@ -75,7 +91,7 @@ export default function SettingsPage() {
         <AccountSettingsPanel />
         <VerificationOverview />
 
-        {studentMode && status !== "pending" && (
+        {studentMode && status !== "pending" && status !== "approved" && (
           <div className="mt-8 overflow-hidden rounded-[16px] border border-black/10 bg-white shadow-[0_20px_45px_rgba(11,12,14,0.06)]">
             <div className="border-b border-black/10 bg-[#eaf7f1] px-5 py-4 sm:px-7">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Profile update</p>

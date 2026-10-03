@@ -98,22 +98,15 @@ export default function PublicProfilePage() {
     }
 
     let active = true;
-    const publicProfileRequest = cachedApiFetch<unknown>(`/api/v1/users/${encodeURIComponent(profileId)}/public-profile`)
-      .then((response) => unwrapData<PublicProfile>(response));
-    const verificationRequest = cachedApiFetch<unknown>(`/api/v1/trust/users/${encodeURIComponent(profileId)}/verification-stage`)
-      .then(normalizeVerificationStage)
-      .catch((verificationLoadError: unknown) => {
-        if (active) setVerificationError(verificationLoadError instanceof Error ? verificationLoadError.message : "Verification badge could not be loaded.");
-        return null;
-      });
-    void Promise.all([publicProfileRequest, verificationRequest])
-      .then(async ([publicProfile, verificationStage]) => {
+    void cachedApiFetch<unknown>(`/api/v1/users/${encodeURIComponent(profileId)}/public-profile`)
+      .then((response) => unwrapData<PublicProfile>(response))
+      .then((publicProfile) => {
         if (!active) return;
         setProfile(publicProfile);
-        setVerification(verificationStage);
-        const pictureUrl = await resolveMediaUrl(publicProfile.profilePicture);
-        if (!active) return;
-        setAvatarUrl(pictureUrl);
+        setLoading(false);
+        void resolveMediaUrl(publicProfile.profilePicture)
+          .then((pictureUrl) => { if (active) setAvatarUrl(pictureUrl); })
+          .catch(() => { if (active) setAvatarUrl(null); });
       })
       .catch((loadError: unknown) => {
         if (isUnauthorizedError(loadError)) {
@@ -121,10 +114,17 @@ export default function PublicProfilePage() {
           router.replace("/login?reason=session-expired");
           return;
         }
-        if (active) setUnavailable(true);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        if (active) {
+          setUnavailable(true);
+          setLoading(false);
+        }
+      });
+
+    void cachedApiFetch<unknown>(`/api/v1/trust/users/${encodeURIComponent(profileId)}/verification-stage`)
+      .then(normalizeVerificationStage)
+      .then((verificationStage) => { if (active) setVerification(verificationStage); })
+      .catch((verificationLoadError: unknown) => {
+        if (active) setVerificationError(verificationLoadError instanceof Error ? verificationLoadError.message : "Verification badge could not be loaded.");
       });
     return () => { active = false; };
   }, [profileId, router]);
@@ -134,20 +134,37 @@ export default function PublicProfilePage() {
     const following = target === "user" ? profile.isFollowingUser === true : profile.isFollowingPage === true;
     const id = target === "user" ? profile.id : profile.providerPageId;
     if (!id) return;
+    const updateLocalFollow = (isFollowing: boolean) => {
+      setProfile((current) => {
+        if (!current) return current;
+        if (target === "user") {
+          const wasFollowing = current.isFollowingUser === true;
+          const delta = Number(isFollowing) - Number(wasFollowing);
+          return {
+            ...current,
+            isFollowingUser: isFollowing,
+            followerCount: Math.max(0, (current.followerCount ?? 0) + delta),
+          };
+        }
+        const wasFollowing = current.isFollowingPage === true;
+        const delta = Number(isFollowing) - Number(wasFollowing);
+        return {
+          ...current,
+          isFollowingPage: isFollowing,
+          providerPageFollowerCount: Math.max(0, (current.providerPageFollowerCount ?? 0) + delta),
+        };
+      });
+    };
     setFollowPending(true);
     setFollowError("");
+    updateLocalFollow(!following);
     try {
       const path = target === "user"
         ? `/api/v1/users/${encodeURIComponent(id)}/follow`
         : `/api/v1/users/pages/${encodeURIComponent(id)}/follow`;
       await apiFetch(path, { method: following ? "DELETE" : "POST" });
-      setProfile((current) => current ? {
-        ...current,
-        ...(target === "user"
-          ? { isFollowingUser: !following, followerCount: Math.max(0, (current.followerCount ?? 0) + (following ? -1 : 1)) }
-          : { isFollowingPage: !following, providerPageFollowerCount: Math.max(0, (current.providerPageFollowerCount ?? 0) + (following ? -1 : 1)) }),
-      } : current);
     } catch (error) {
+      updateLocalFollow(following);
       setFollowError(error instanceof Error ? error.message : "We could not update your follow.");
     } finally {
       setFollowPending(false);

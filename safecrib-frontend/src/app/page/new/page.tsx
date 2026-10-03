@@ -123,6 +123,7 @@ export default function NewProviderPage() {
         const accountStatus = normalizeAccountStatus(profileStatus);
         setStudentStatus(accountStatus);
         if (accountStatus === "pending") { router.replace("/page"); return; }
+        if (accountStatus === "approved") { router.replace("/dashboard"); return; }
       }
       const rawStatus = String(providerPage?.status ?? "NONE").toUpperCase();
       setStatus(rawStatus);

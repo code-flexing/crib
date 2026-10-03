@@ -2896,6 +2896,10 @@ html[data-theme="dark"] .safecrib-back-home:hover {
   background-color: rgb(255 255 255 / 0.9);
 }
 
+.hover\:bg-safecrib-green\/10:hover {
+  background-color: rgb(12 115 85 / 0.1);
+}
+
 .hover\:text-\[\#0a5f47\]:hover {
   --tw-text-opacity: 1;
   color: rgb(10 95 71 / var(--tw-text-opacity, 1));

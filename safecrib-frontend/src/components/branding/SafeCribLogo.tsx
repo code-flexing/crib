@@ -1,5 +1,8 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useTheme } from "@/components/theme/ThemeProvider";
 
 type SafeCribLogoProps = {
   /** Rendered height in pixels; width scales to preserve the logo's aspect ratio. */
@@ -11,9 +14,7 @@ type SafeCribLogoProps = {
 };
 
 /**
- * Renders the official SafeCrib logo exactly as supplied at /public/logo.png.
- * This component never recolors, distorts, or reconstructs the mark — it only
- * controls layout (sizing, optional home link, loading priority).
+ * Renders the official SafeCrib logo using the variant that matches the active theme.
  */
 export function SafeCribLogo({
   height = 42,
@@ -21,9 +22,11 @@ export function SafeCribLogo({
   className,
   priority = true,
 }: SafeCribLogoProps) {
+  const { resolvedTheme } = useTheme();
+  const logoSource = resolvedTheme === "light" ? "/logo(black).png" : "/logo(light).png";
   const mark = (
     <Image
-      src="/logo.png"
+      src={logoSource}
       alt="SafeCrib"
       height={height}
       width={height * 5}

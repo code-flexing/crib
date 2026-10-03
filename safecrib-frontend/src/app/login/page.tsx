@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -193,16 +194,26 @@ export default function LoginPage() {
           {step === 2 && (
             <div className="mt-8">
               <label htmlFor="password" className="mb-2 block text-sm font-medium text-safecrib-black">Password</label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                autoFocus
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Enter your password"
-                className="w-full rounded-[8px] border border-black/15 bg-white px-4 py-3 text-base text-safecrib-black placeholder:text-black/35 focus:border-safecrib-green focus:outline-none"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  autoFocus
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Enter your password"
+                  className="w-full rounded-[8px] border border-black/15 bg-white px-4 py-3 pr-20 text-base text-safecrib-black placeholder:text-black/35 focus:border-safecrib-green focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute inset-y-0 right-3 text-sm font-medium text-safecrib-green hover:text-[#0a5f47]"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
               <button type="button" className="mt-3 text-sm font-medium text-safecrib-green">Forgot password?</button>
             </div>
           )}

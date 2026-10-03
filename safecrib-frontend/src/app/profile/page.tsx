@@ -221,42 +221,31 @@ export default function ProfilePage() {
           <div className="px-4 sm:px-0"><BackHomeLink /></div>
           <span className="pr-4 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-black/40 sm:pr-0">Trust profile</span>
         </div>
-        <section className="relative mt-4 overflow-hidden rounded-none bg-[#123b2f] shadow-[0_26px_70px_rgba(10,54,40,0.2)] sm:mt-6 sm:rounded-[1.75rem]" aria-labelledby="profile-heading">
-          <div className="relative min-h-52 overflow-hidden px-5 pb-7 pt-6 sm:min-h-64 sm:px-8 sm:pt-8">
-            <div aria-hidden="true" className="absolute -right-16 -top-28 h-80 w-80 rounded-full border border-white/15" />
-            <div aria-hidden="true" className="absolute -right-2 -top-16 h-52 w-52 rounded-full border border-white/10" />
-            <div aria-hidden="true" className="absolute bottom-0 left-1/3 h-28 w-28 rounded-full bg-[#7bd6ad]/10 blur-2xl" />
-            <div className="relative flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-[#a8e7cb]">SafeCrib</p>
-                <p className="mt-2 max-w-xs text-sm leading-6 text-white/65">A profile built around evidence, identity, and safer homes.</p>
-              </div>
-              {verification && <VerificationBadge verification={verification} compact />}
+        <section className="relative mt-4 overflow-hidden rounded-none border-y border-[#2a6652] bg-[#123b2f] shadow-[0_26px_70px_rgba(10,54,40,0.2)] sm:mt-6 sm:rounded-[1.75rem] sm:border" aria-labelledby="profile-heading">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:32px_32px]" />
+          <div className="relative px-5 pb-5 pt-6 sm:px-8 sm:pb-7 sm:pt-8">
+            <div className="flex items-center justify-between gap-4 border-b border-white/15 pb-4">
+              <div className="flex items-center gap-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#a8e7cb]"><span className="flex h-7 w-7 items-center justify-center border border-[#a8e7cb]/50 text-[0.55rem]">SC</span><span>Trust passport</span></div>
+              <span className="font-mono text-[0.6rem] tracking-[0.16em] text-white/40">{user?.id ? `ID ${user.id.slice(0, 8).toUpperCase()}` : "ID RECORD"}</span>
             </div>
-            <span className="absolute bottom-5 right-5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/45">Member profile</span>
-          </div>
-          <div className="relative border-t border-white/10 bg-white px-5 pb-6 sm:px-8 sm:pb-7">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-end">
-              <ProfileAvatar src={avatarUrl} seed={user?.id ?? user?.email ?? "safecrib-member-avatar"} alt={`${name} profile`} size="large" className="-mt-16 border-8 border-[#123b2f] sm:-mt-20" />
-              <div className="min-w-0 flex-1 sm:pb-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 id="profile-heading" className="break-words font-display text-3xl font-bold tracking-tight text-safecrib-black sm:text-4xl">{name}</h1>
+            <div className="mt-7 flex flex-col gap-6 sm:flex-row sm:items-center">
+              <ProfileAvatar src={avatarUrl} seed={user?.id ?? user?.email ?? "safecrib-member-avatar"} alt={`${name} profile`} size="large" className="border-8 border-[#123b2f] ring-1 ring-[#a8e7cb]/40" />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 id="profile-heading" className="break-words font-display text-3xl font-bold tracking-tight text-white sm:text-5xl">{name}</h1>
+                  {verification && <VerificationBadge verification={verification} compact />}
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-safecrib-green/[0.1] px-3 py-1 text-xs font-semibold text-safecrib-green">{accountLabel}</span>
-                  {dateLabel(user?.createdAt) && <span className="text-xs text-black/45">Member since {dateLabel(user?.createdAt)}</span>}
-                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-white/60"><span className="text-[#a8e7cb]">{accountLabel}</span><span aria-hidden="true">/</span>{dateLabel(user?.createdAt) && <span>Member since {dateLabel(user?.createdAt)}</span>}</div>
               </div>
-              <Link href="/settings" className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-safecrib-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a5f47] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green sm:w-auto">
+              <Link href="/settings" className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 border border-white/25 px-5 py-2.5 text-sm font-semibold text-white transition hover:border-[#a8e7cb] hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a8e7cb] sm:w-auto">
                 <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m12.5 3.5 4 4M4 16l3.5-.7L16.7 6a1.7 1.7 0 0 0-2.4-2.4L5.1 12.8 4 16Z" /><path d="M3.5 18h13" /></svg>
-                Edit profile
+                Edit record
               </Link>
             </div>
-            <div className="mt-7 -mx-1 flex snap-x gap-6 overflow-x-auto rounded-2xl bg-[#123b2f] px-4 py-4 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-5">
+            <div className="mt-8 -mx-1 flex snap-x gap-6 overflow-x-auto border-t border-white/15 pt-5 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-4 sm:gap-4">
               <ProfileStat label="Trust stage" value={verification ? readable(verification.stage) : "Building"} />
               <ProfileStat label="Followers" value={providerStats?.followerCount ?? user?.followerCount ?? 0} />
               <ProfileStat label={role === "STUDENT" ? "Interactions" : "Homes"} value={role === "STUDENT" ? studentEngagement?.totalInteractions ?? 0 : listings.length} />
-              <ProfileStat label="Account" value={readable(role) || "Member"} />
             </div>
           </div>
         </section>
@@ -266,10 +255,8 @@ export default function ProfilePage() {
         <div className="mt-8 grid gap-10 lg:mt-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,.85fr)]">
           <div className="order-2 min-w-0 space-y-10 px-4 sm:px-0 lg:order-1">
             <section aria-labelledby="about-heading">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">The person behind the profile</p>
               <div className="mt-2 flex items-end justify-between gap-4 border-b border-black/10 pb-4">
                 <h2 id="about-heading" className="font-display text-2xl font-bold tracking-tight text-safecrib-black">About you</h2>
-                <span className="text-xs font-medium text-black/40">Private account details</span>
               </div>
               <dl className="mt-3 grid gap-x-8 sm:grid-cols-2">
                 <Detail label="Email address" value={user?.email} />
@@ -294,10 +281,6 @@ export default function ProfilePage() {
                 </>}
               </dl>
               {provider?.description && <p className="mt-5 max-w-2xl border-l-2 border-safecrib-green/35 pl-4 text-sm leading-7 text-black/65">{provider.description}</p>}
-              {provider?.payoutAccounts?.length ? <div className="mt-5 border-t border-black/10 pt-4">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-black/45">Payout accounts · private</h3>
-                <ul className="mt-2 space-y-2">{provider.payoutAccounts.map((account, index) => <li key={`${account.provider ?? "account"}-${index}`} className="text-sm leading-6 text-black/65">{[account.provider, account.accountName, account.accountNumber].filter(Boolean).join(" · ")}</li>)}</ul>
-              </div> : null}
               {student?.socialLinks && <div className="mt-5"><SafeLinks links={student.socialLinks} /></div>}
               {provider?.socialLinks && <div className="mt-5"><SafeLinks links={provider.socialLinks} /></div>}
             </section>
@@ -306,24 +289,22 @@ export default function ProfilePage() {
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Activity</p>
               <div className="mt-2 flex items-end justify-between gap-4 border-b border-black/10 pb-4">
                 <h2 id="posts-heading" className="font-display text-2xl font-bold tracking-tight text-safecrib-black">{["AGENT", "LANDLORD"].includes(role) ? "Your homes and posts" : "Your posts"}</h2>
-                <span className="text-xs font-medium text-black/40">Visible activity</span>
               </div>
               {["AGENT", "LANDLORD"].includes(role)
                 ? <ListingGrid listings={listings} own />
-                : <div className="mt-5 border border-dashed border-black/15 bg-white px-5 py-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-safecrib-green/10 text-xl text-safecrib-green">+</div><p className="mt-4 text-sm font-medium text-safecrib-black">Your activity starts here</p><p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-black/50">Your saved homes, recommendations, and posts will gather here as you use SafeCrib.</p></div>}
+                : <div className="mt-5 border border-dashed border-black/15 bg-white px-5 py-10 text-center text-sm text-black/50">No activity yet.</div>}
             </section>
           </div>
 
           <aside className="order-1 min-w-0 space-y-5 px-4 sm:px-0 lg:order-2">
-            <section className="overflow-hidden rounded-[1.5rem] bg-[#123b2f] p-6 text-white shadow-[0_18px_45px_rgba(10,54,40,0.16)]" aria-labelledby="trust-heading">
+            <section className="overflow-hidden border-l-2 border-safecrib-green bg-white p-6 shadow-[0_14px_36px_rgba(11,12,14,0.06)]" aria-labelledby="trust-heading">
               <div className="flex items-start justify-between gap-4">
-                <div><p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#a8e7cb]">Trust snapshot</p><h2 id="trust-heading" className="mt-2 text-2xl font-semibold">{verification ? readable(verification.stage) : "Your trust journey"}</h2></div>
+                <div><p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-safecrib-green">Trust ledger</p><h2 id="trust-heading" className="mt-2 text-2xl font-semibold text-safecrib-black">{verification ? readable(verification.stage) : "Your trust journey"}</h2></div>
                 {verification && <VerificationBadge verification={verification} compact iconOnly />}
               </div>
-              <p className="mt-4 text-sm leading-6 text-white/65">SafeCrib recognition is calculated from verified evidence and platform activity. Your account never self-assigns a badge.</p>
-              {verification?.riskBlocked && <p className="mt-5 border-l-2 border-[#f7d18a] pl-3 text-sm leading-6 text-[#f7d18a]">Your advanced badge progress is paused while your account is under review.</p>}
-              {verification?.criteria?.length ? <ul className="mt-6 space-y-3 border-t border-white/10 pt-5">{verification.criteria.slice(0, 4).map((criterion) => <li key={criterion.key} className="flex items-center justify-between gap-3 text-sm"><span className="text-white/70">{criterion.label}</span><span className={criterion.met ? "text-[#a8e7cb]" : "text-white/35"}>{criterion.met ? "Verified" : "In progress"}</span></li>)}</ul> : <p className="mt-6 border-t border-white/10 pt-5 text-sm text-white/55">Complete your profile and verified actions to build your trust record.</p>}
-              {verification?.nextMilestone && <p className="mt-5 text-xs leading-5 text-white/45">Next milestone: {verification.nextMilestone}</p>}
+              {verification?.riskBlocked && <p className="mt-5 border-l-2 border-[#c28a20] pl-3 text-sm leading-6 text-[#8a5d00]">Your advanced badge progress is paused while your account is under review.</p>}
+              {verification?.criteria?.length ? <ul className="mt-6 space-y-3 border-t border-black/10 pt-5">{verification.criteria.slice(0, 4).map((criterion) => <li key={criterion.key} className="flex items-center justify-between gap-3 text-sm"><span className="text-black/60">{criterion.label}</span><span className={criterion.met ? "text-safecrib-green" : "text-black/35"}>{criterion.met ? "Verified" : "In progress"}</span></li>)}</ul> : <p className="mt-6 border-t border-black/10 pt-5 text-sm text-black/55">Complete your profile and verified actions to build your trust record.</p>}
+              {verification?.nextMilestone && <p className="mt-5 text-xs leading-5 text-black/45">Next milestone: {verification.nextMilestone}</p>}
             </section>
 
             {(role === "STUDENT" && studentEngagement) && <section className="border-t border-black/10 pt-5" aria-label="Private student engagement"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/45">Private to you</p><h2 className="mt-1 text-lg font-semibold text-safecrib-black">Your engagement</h2><div className="mt-4 grid grid-cols-2 gap-4"><div><p className="text-xs text-black/50">Interactions</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{studentEngagement.totalInteractions}</p></div><div><p className="text-xs text-black/50">Follows</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{studentEngagement.follows}</p></div></div></section>}

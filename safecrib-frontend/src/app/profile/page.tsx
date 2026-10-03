@@ -263,68 +263,73 @@ export default function ProfilePage() {
 
         {error && <p role="alert" className="mt-6 border-l-4 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <section className="rounded-2xl border border-black/[0.08] bg-white p-5 shadow-[0_14px_36px_rgba(11,12,14,0.045)] sm:p-6" aria-labelledby="about-heading">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Your information</p>
-            <h2 id="about-heading" className="mt-1 text-xl font-semibold text-safecrib-black">About you</h2>
-            <dl className="mt-4">
-              <Detail label="Email address" value={user?.email} />
-              <Detail label="Account type" value={readable(role)} />
-              <Detail label="Account status" value={accountLabel} />
-              {student && <>
-                <Detail label="School" value={student.schoolOfStudy} />
-                <Detail label="Course of study" value={student.courseOfStudy} />
-                <Detail label="Level" value={student.level} />
-                <Detail label="Phone number" value={student.phoneNumber} />
-                <Detail label="Gender" value={readable(student.gender)} />
-                <Detail label="Date of birth" value={student.dateOfBirth ? new Date(student.dateOfBirth).toLocaleDateString() : ""} />
-                <Detail label="Emergency contact" value={student.emergencyContact} />
-              </>}
-              {provider && <>
-                <Detail label="Business name" value={provider.businessName} />
-                <Detail label="Provider type" value={readable(provider.providerType)} />
-                <Detail label="Contact number" value={provider.phone} />
-                <Detail label="Business email" value={provider.email} />
-                <Detail label="Business address" value={provider.businessAddress} />
-                <Detail label="Additional contact numbers" value={provider.additionalContactNumbers?.join(", ")} />
-              </>}
-            </dl>
-            {provider?.description && <p className="mt-3 border-t border-black/10 pt-4 text-sm leading-6 text-black/65">{provider.description}</p>}
-            {provider?.payoutAccounts?.length ? <div className="mt-4 border-t border-black/10 pt-4">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-black/45">Payout accounts · private</h3>
-              <ul className="mt-2 space-y-3">{provider.payoutAccounts.map((account, index) => <li key={`${account.provider ?? "account"}-${index}`} className="text-sm leading-6 text-black/65">{[account.provider, account.accountName, account.accountNumber].filter(Boolean).join(" · ")}</li>)}</ul>
-            </div> : null}
-            {student?.socialLinks && <div className="mt-4"><SafeLinks links={student.socialLinks} /></div>}
-            {provider?.socialLinks && <div className="mt-4"><SafeLinks links={provider.socialLinks} /></div>}
-          </section>
+        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,.85fr)]">
+          <div className="min-w-0 space-y-10">
+            <section aria-labelledby="about-heading">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">The person behind the profile</p>
+              <div className="mt-2 flex items-end justify-between gap-4 border-b border-black/10 pb-4">
+                <h2 id="about-heading" className="font-display text-2xl font-bold tracking-tight text-safecrib-black">About you</h2>
+                <span className="text-xs font-medium text-black/40">Private account details</span>
+              </div>
+              <dl className="mt-3 grid gap-x-8 sm:grid-cols-2">
+                <Detail label="Email address" value={user?.email} />
+                <Detail label="Account type" value={readable(role)} />
+                <Detail label="Account status" value={accountLabel} />
+                {student && <>
+                  <Detail label="School" value={student.schoolOfStudy} />
+                  <Detail label="Course of study" value={student.courseOfStudy} />
+                  <Detail label="Level" value={student.level} />
+                  <Detail label="Phone number" value={student.phoneNumber} />
+                  <Detail label="Gender" value={readable(student.gender)} />
+                  <Detail label="Date of birth" value={student.dateOfBirth ? new Date(student.dateOfBirth).toLocaleDateString() : ""} />
+                  <Detail label="Emergency contact" value={student.emergencyContact} />
+                </>}
+                {provider && <>
+                  <Detail label="Business name" value={provider.businessName} />
+                  <Detail label="Provider type" value={readable(provider.providerType)} />
+                  <Detail label="Contact number" value={provider.phone} />
+                  <Detail label="Business email" value={provider.email} />
+                  <Detail label="Business address" value={provider.businessAddress} />
+                  <Detail label="Additional contact numbers" value={provider.additionalContactNumbers?.join(", ")} />
+                </>}
+              </dl>
+              {provider?.description && <p className="mt-5 max-w-2xl border-l-2 border-safecrib-green/35 pl-4 text-sm leading-7 text-black/65">{provider.description}</p>}
+              {provider?.payoutAccounts?.length ? <div className="mt-5 border-t border-black/10 pt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-black/45">Payout accounts · private</h3>
+                <ul className="mt-2 space-y-2">{provider.payoutAccounts.map((account, index) => <li key={`${account.provider ?? "account"}-${index}`} className="text-sm leading-6 text-black/65">{[account.provider, account.accountName, account.accountNumber].filter(Boolean).join(" · ")}</li>)}</ul>
+              </div> : null}
+              {student?.socialLinks && <div className="mt-5"><SafeLinks links={student.socialLinks} /></div>}
+              {provider?.socialLinks && <div className="mt-5"><SafeLinks links={provider.socialLinks} /></div>}
+            </section>
 
-          <section className="rounded-2xl border border-black/[0.08] bg-white p-5 shadow-[0_14px_36px_rgba(11,12,14,0.045)] sm:p-6" aria-labelledby="posts-heading">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Activity</p>
-            <h2 id="posts-heading" className="mt-1 text-xl font-semibold text-safecrib-black">{["AGENT", "LANDLORD"].includes(role) ? "Your homes and posts" : "Your posts"}</h2>
-            {["AGENT", "LANDLORD"].includes(role)
-              ? <ListingGrid listings={listings} own />
-              : <p className="mt-5 rounded-xl border border-dashed border-black/15 bg-[#fafbf9] px-5 py-8 text-center text-sm leading-6 text-black/55">Your activity and posts will appear here when you share them.</p>}
-          </section>
+            <section aria-labelledby="posts-heading">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">Activity</p>
+              <div className="mt-2 flex items-end justify-between gap-4 border-b border-black/10 pb-4">
+                <h2 id="posts-heading" className="font-display text-2xl font-bold tracking-tight text-safecrib-black">{["AGENT", "LANDLORD"].includes(role) ? "Your homes and posts" : "Your posts"}</h2>
+                <span className="text-xs font-medium text-black/40">Visible activity</span>
+              </div>
+              {["AGENT", "LANDLORD"].includes(role)
+                ? <ListingGrid listings={listings} own />
+                : <div className="mt-5 border border-dashed border-black/15 bg-white px-5 py-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-safecrib-green/10 text-xl text-safecrib-green">+</div><p className="mt-4 text-sm font-medium text-safecrib-black">Your activity starts here</p><p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-black/50">Your saved homes, recommendations, and posts will gather here as you use SafeCrib.</p></div>}
+            </section>
+          </div>
+
+          <aside className="min-w-0 space-y-5">
+            <section className="overflow-hidden rounded-[1.5rem] bg-[#123b2f] p-6 text-white shadow-[0_18px_45px_rgba(10,54,40,0.16)]" aria-labelledby="trust-heading">
+              <div className="flex items-start justify-between gap-4">
+                <div><p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#a8e7cb]">Trust snapshot</p><h2 id="trust-heading" className="mt-2 text-2xl font-semibold">{verification ? readable(verification.stage) : "Your trust journey"}</h2></div>
+                {verification && <VerificationBadge verification={verification} compact iconOnly />}
+              </div>
+              <p className="mt-4 text-sm leading-6 text-white/65">SafeCrib recognition is calculated from verified evidence and platform activity. Your account never self-assigns a badge.</p>
+              {verification?.riskBlocked && <p className="mt-5 border-l-2 border-[#f7d18a] pl-3 text-sm leading-6 text-[#f7d18a]">Your advanced badge progress is paused while your account is under review.</p>}
+              {verification?.criteria?.length ? <ul className="mt-6 space-y-3 border-t border-white/10 pt-5">{verification.criteria.slice(0, 4).map((criterion) => <li key={criterion.key} className="flex items-center justify-between gap-3 text-sm"><span className="text-white/70">{criterion.label}</span><span className={criterion.met ? "text-[#a8e7cb]" : "text-white/35"}>{criterion.met ? "Verified" : "In progress"}</span></li>)}</ul> : <p className="mt-6 border-t border-white/10 pt-5 text-sm text-white/55">Complete your profile and verified actions to build your trust record.</p>}
+              {verification?.nextMilestone && <p className="mt-5 text-xs leading-5 text-white/45">Next milestone: {verification.nextMilestone}</p>}
+            </section>
+
+            {(role === "STUDENT" && studentEngagement) && <section className="border-t border-black/10 pt-5" aria-label="Private student engagement"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/45">Private to you</p><h2 className="mt-1 text-lg font-semibold text-safecrib-black">Your engagement</h2><div className="mt-4 grid grid-cols-2 gap-4"><div><p className="text-xs text-black/50">Interactions</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{studentEngagement.totalInteractions}</p></div><div><p className="text-xs text-black/50">Follows</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{studentEngagement.follows}</p></div></div></section>}
+            {["AGENT", "LANDLORD"].includes(role) && providerStats && <section className="border-t border-black/10 pt-5" aria-label="Public provider engagement"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/45">Public activity</p><h2 className="mt-1 text-lg font-semibold text-safecrib-black">Your provider reach</h2><div className="mt-4 grid grid-cols-3 gap-3"><div><p className="text-xs text-black/50">Recs</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{providerStats.recommendationCount}</p></div><div><p className="text-xs text-black/50">Likes</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{listings.reduce((sum, listing) => sum + (listing.likeCount ?? 0), 0)}</p></div><div><p className="text-xs text-black/50">Followers</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{providerStats.followerCount}</p></div></div></section>}
+          </aside>
         </div>
-
-        {role === "STUDENT" && studentEngagement && <section className="mt-6 rounded-2xl border border-black/[0.08] bg-white p-5 shadow-[0_14px_36px_rgba(11,12,14,0.045)] sm:p-6" aria-label="Private student engagement">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Private to you</p>
-          <h2 className="mt-1 text-xl font-semibold text-safecrib-black">Your engagement</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl bg-[#f7faf8] p-4"><p className="text-xs text-black/50">Total interactions</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{studentEngagement.totalInteractions}</p></div>
-            <div className="rounded-xl bg-[#f7faf8] p-4"><p className="text-xs text-black/50">Total engagement</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{studentEngagement.totalInteractions + studentEngagement.follows}</p></div>
-          </div>
-        </section>}
-
-        {["AGENT", "LANDLORD"].includes(role) && providerStats && <section className="mt-6 rounded-2xl border border-black/[0.08] bg-white p-5 shadow-[0_14px_36px_rgba(11,12,14,0.045)] sm:p-6" aria-label="Public provider engagement">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Public activity</p>
-          <h2 className="mt-1 text-xl font-semibold text-safecrib-black">Your provider engagement</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl bg-[#f7faf8] p-4"><p className="text-xs text-black/50">Recommendations</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{providerStats.recommendationCount}</p></div>
-            <div className="rounded-xl bg-[#f7faf8] p-4"><p className="text-xs text-black/50">Home likes</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{listings.reduce((sum, listing) => sum + (listing.likeCount ?? 0), 0)}</p></div>
-            <div className="rounded-xl bg-[#f7faf8] p-4"><p className="text-xs text-black/50">Followers</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{providerStats.followerCount}</p></div>
-          </div>
-        </section>}
 
         {student && studentStatus !== "approved" && (
           <div className="mt-6 flex flex-col justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-center">

@@ -92,6 +92,13 @@ function SafeLinks({ links }: { links?: Record<string, string> }) {
   return <div className="flex flex-wrap gap-x-4 gap-y-2 border-t border-black/10 pt-4">{entries.map(([label, href]) => <a key={label} href={href} target="_blank" rel="noreferrer" className="text-sm font-medium text-safecrib-green hover:underline">{readable(label) || "Website"}</a>)}</div>;
 }
 
+function ProfileStat({ label, value }: { label: string; value: string | number }) {
+  return <div className="min-w-0 border-l border-white/15 pl-4 first:border-l-0 first:pl-0">
+    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/55">{label}</p>
+    <p className="mt-1 truncate text-lg font-semibold text-white">{value}</p>
+  </div>;
+}
+
 function ListingGrid({ listings, own = false }: { listings: Listing[]; own?: boolean }) {
   if (listings.length === 0) return <p className="mt-5 rounded-xl border border-dashed border-black/15 bg-white px-5 py-8 text-center text-sm text-black/55">{own ? "Your homes and posts will appear here." : "There are no public posts to show yet."}</p>;
   return <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -207,32 +214,50 @@ export default function ProfilePage() {
   const accountLabel = role === "UNVERIFIED" || role === "STUDENT" ? readable(studentStatus) : readable(role);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f5f7f2_100%)] pb-24 md:pb-8">
+    <main className="min-h-screen bg-[#f2f5f3] pb-24 md:pb-8">
       <DashboardNav onCreatePage={() => router.push("/page/new")} pageStatus="none" canManagePage={["AGENT", "LANDLORD", "ADMIN"].includes(role)} />
       <section className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
-        <BackHomeLink />
-        <section className="mt-6 overflow-hidden rounded-[1.5rem] border border-black/[0.08] bg-white shadow-[0_24px_60px_rgba(11,12,14,0.08)]" aria-labelledby="profile-heading">
-          <div className="relative h-32 overflow-hidden bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.45),transparent_30%),linear-gradient(120deg,#064e3b,#0b684c_52%,#b9dfc9)] sm:h-40">
-            <div aria-hidden="true" className="absolute -right-8 -top-24 h-64 w-64 rounded-full border border-white/20" />
-            <div aria-hidden="true" className="absolute -right-2 -top-16 h-48 w-48 rounded-full border border-white/15" />
-            <span className="absolute bottom-4 right-5 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/90 backdrop-blur-sm">SafeCrib member</span>
-          </div>
-          <div className="flex flex-col gap-5 px-5 pb-6 sm:flex-row sm:items-end sm:px-8">
-            <ProfileAvatar src={avatarUrl} seed={user?.id ?? user?.email ?? "safecrib-member-avatar"} alt={`${name} profile`} size="large" className="-mt-14 border-4 border-white sm:-mt-16" />
-            <div className="min-w-0 flex-1 sm:pb-1">
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <h1 id="profile-heading" className="break-words font-display text-3xl font-bold text-safecrib-black sm:text-4xl">{name}</h1>
-                {verification && <VerificationBadge verification={verification} compact iconOnly />}
+        <div className="flex items-center justify-between gap-4">
+          <BackHomeLink />
+          <span className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-black/40 sm:block">Trust profile</span>
+        </div>
+        <section className="relative mt-6 overflow-hidden rounded-[1.75rem] bg-[#123b2f] shadow-[0_26px_70px_rgba(10,54,40,0.2)]" aria-labelledby="profile-heading">
+          <div className="relative min-h-52 overflow-hidden px-5 pb-7 pt-6 sm:min-h-64 sm:px-8 sm:pt-8">
+            <div aria-hidden="true" className="absolute -right-16 -top-28 h-80 w-80 rounded-full border border-white/15" />
+            <div aria-hidden="true" className="absolute -right-2 -top-16 h-52 w-52 rounded-full border border-white/10" />
+            <div aria-hidden="true" className="absolute bottom-0 left-1/3 h-28 w-28 rounded-full bg-[#7bd6ad]/10 blur-2xl" />
+            <div className="relative flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-[#a8e7cb]">SafeCrib</p>
+                <p className="mt-2 max-w-xs text-sm leading-6 text-white/65">A profile built around evidence, identity, and safer homes.</p>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-safecrib-green/[0.08] px-3 py-1 text-xs font-semibold text-safecrib-green">{accountLabel}</span>
-                {dateLabel(user?.createdAt) && <span className="text-xs text-black/45">Member since {dateLabel(user?.createdAt)}</span>}
-              </div>
+              {verification && <VerificationBadge verification={verification} compact />}
             </div>
-            <Link href="/settings" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-safecrib-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a5f47] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green">
-              <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m12.5 3.5 4 4M4 16l3.5-.7L16.7 6a1.7 1.7 0 0 0-2.4-2.4L5.1 12.8 4 16Z" /><path d="M3.5 18h13" /></svg>
-              Edit profile
-            </Link>
+            <span className="absolute bottom-5 right-5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/45">Member profile</span>
+          </div>
+          <div className="relative border-t border-white/10 bg-white px-5 pb-6 sm:px-8 sm:pb-7">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-end">
+              <ProfileAvatar src={avatarUrl} seed={user?.id ?? user?.email ?? "safecrib-member-avatar"} alt={`${name} profile`} size="large" className="-mt-16 border-8 border-[#123b2f] sm:-mt-20" />
+              <div className="min-w-0 flex-1 sm:pb-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 id="profile-heading" className="break-words font-display text-3xl font-bold tracking-tight text-safecrib-black sm:text-4xl">{name}</h1>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-safecrib-green/[0.1] px-3 py-1 text-xs font-semibold text-safecrib-green">{accountLabel}</span>
+                  {dateLabel(user?.createdAt) && <span className="text-xs text-black/45">Member since {dateLabel(user?.createdAt)}</span>}
+                </div>
+              </div>
+              <Link href="/settings" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-safecrib-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a5f47] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green">
+                <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m12.5 3.5 4 4M4 16l3.5-.7L16.7 6a1.7 1.7 0 0 0-2.4-2.4L5.1 12.8 4 16Z" /><path d="M3.5 18h13" /></svg>
+                Edit profile
+              </Link>
+            </div>
+            <div className="mt-7 grid grid-cols-2 gap-4 rounded-2xl bg-[#123b2f] px-4 py-4 sm:grid-cols-4 sm:px-5">
+              <ProfileStat label="Trust stage" value={verification ? readable(verification.stage) : "Building"} />
+              <ProfileStat label="Followers" value={providerStats?.followerCount ?? user?.followerCount ?? 0} />
+              <ProfileStat label={role === "STUDENT" ? "Interactions" : "Homes"} value={role === "STUDENT" ? studentEngagement?.totalInteractions ?? 0 : listings.length} />
+              <ProfileStat label="Account" value={readable(role) || "Member"} />
+            </div>
           </div>
         </section>
 

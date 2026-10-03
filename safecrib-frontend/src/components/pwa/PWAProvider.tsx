@@ -14,6 +14,7 @@ import {
   type PWABrowserEngine,
   type PWAPlatform,
 } from "@/lib/pwa";
+import { getCurrentUser } from "@/lib/api";
 
 export function PWAProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -25,9 +26,30 @@ export function PWAProvider({ children }: { children: ReactNode }) {
   const [engine, setEngine] = useState<PWABrowserEngine>("unknown");
 
   useEffect(() => {
-    if (pathname === "/" && isRunningStandalone()) {
+    if (pathname !== "/" || !isRunningStandalone()) return;
+
+    const hasSession = Boolean(
+      window.localStorage.getItem("safecrib_access_token") ||
+      window.localStorage.getItem("safecrib_refresh_token"),
+    );
+
+    if (!hasSession) {
       router.replace("/login");
+      return;
     }
+
+    let active = true;
+    void getCurrentUser<unknown>()
+      .then(() => {
+        if (active) router.replace("/dashboard");
+      })
+      .catch(() => {
+        if (active) router.replace("/login");
+      });
+
+    return () => {
+      active = false;
+    };
   }, [pathname, router]);
 
   useEffect(() => {

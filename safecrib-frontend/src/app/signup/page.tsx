@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
-import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
 import { InstallButton } from "@/components/pwa/InstallButton";
 import { Button } from "@/components/ui/Button";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
@@ -38,19 +37,10 @@ const emptyForm: FormState = {
 const SIGNUP_DRAFT_KEY = "safecrib:draft:signup:v1";
 
 const stepLabels = [
-  "Welcome",
-  "Email",
-  "Display name",
+  "Account",
   "Password",
-  "Confirm password",
   "Review",
   "Success",
-];
-
-const passwordRules = [
-  { label: "8+ characters", valid: (value: string) => value.length >= 8 },
-  { label: "1 number", valid: (value: string) => /\d/.test(value) },
-  { label: "1 uppercase letter", valid: (value: string) => /[A-Z]/.test(value) },
 ];
 
 function isValidEmail(value: string) {
@@ -86,14 +76,9 @@ export default function SignUpPage() {
     return () => window.clearTimeout(timeout);
   }, [draftHydrated, form.displayName, form.email, isSuccess, step]);
 
-  const progress = ((step + 1) / stepLabels.length) * 100;
+  const progress = (Math.min(step + 1, 3) / 3) * 100;
 
-  const currentStepLabel = stepLabels[Math.min(step, stepLabels.length - 1)];
-
-  const passwordChecks = useMemo(
-    () => passwordRules.map((rule) => ({ ...rule, passed: rule.valid(form.password) })),
-    [form.password],
-  );
+  const currentStepLabel = step === stepLabels.length - 1 ? "Complete" : stepLabels[step];
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -102,7 +87,7 @@ export default function SignUpPage() {
 
   const validateCurrentStep = () => {
     switch (step) {
-      case 1: {
+      case 0: {
         if (!form.email.trim()) {
           setErrors((current) => ({ ...current, email: "Email is required." }));
           return false;
@@ -113,21 +98,16 @@ export default function SignUpPage() {
           return false;
         }
 
-        setErrors((current) => ({ ...current, email: undefined }));
-        return true;
-      }
-
-      case 2: {
         if (!form.displayName.trim()) {
           setErrors((current) => ({ ...current, displayName: "Display name is required." }));
           return false;
         }
 
-        setErrors((current) => ({ ...current, displayName: undefined }));
+        setErrors((current) => ({ ...current, email: undefined, displayName: undefined }));
         return true;
       }
 
-      case 3: {
+      case 1: {
         if (!form.password) {
           setErrors((current) => ({ ...current, password: "Password is required." }));
           return false;
@@ -138,11 +118,6 @@ export default function SignUpPage() {
           return false;
         }
 
-        setErrors((current) => ({ ...current, password: undefined }));
-        return true;
-      }
-
-      case 4: {
         if (!form.confirmPassword) {
           setErrors((current) => ({ ...current, confirmPassword: "Please confirm your password." }));
           return false;
@@ -153,7 +128,7 @@ export default function SignUpPage() {
           return false;
         }
 
-        setErrors((current) => ({ ...current, confirmPassword: undefined }));
+        setErrors((current) => ({ ...current, password: undefined, confirmPassword: undefined }));
         return true;
       }
 
@@ -184,7 +159,7 @@ export default function SignUpPage() {
   };
 
   const goNext = () => {
-    if (step >= 1 && step <= 4) {
+    if (step >= 0 && step <= 1) {
       const isValid = validateCurrentStep();
       if (!isValid) return;
     }
@@ -271,32 +246,12 @@ export default function SignUpPage() {
 
     if (step === 0) {
       return (
-        <div className="w-full max-w-lg text-center">
-          <h1 className="mt-4 text-4xl font-medium text-safecrib-black sm:text-5xl">
-            Create your account
-          </h1>
-
-          <div className="mt-5 overflow-hidden rounded-[18px] border border-black/10 bg-[#f7faf8] p-2 shadow-[0_12px_28px_rgba(11,12,14,0.04)]">
-            <div className="mx-auto max-w-[220px]">
-              <VerifiedHomeIllustration />
-            </div>
-          </div>
-
-          <div className="mt-6 flex justify-center">
-            <Button type="button" onClick={goNext} className="min-w-[180px]">Create account</Button>
-          </div>
-        </div>
-      );
-    }
-
-    if (step === 1) {
-      return (
         <div className="w-full max-w-xl">
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-safecrib-green">
-              Step 1 of 6
+              Step 1 of 3
             </p>
-            <h2 className="mt-3 text-3xl font-medium text-safecrib-black">What is your email?</h2>
+            <h2 className="mt-3 text-3xl font-medium text-safecrib-black">Create your account</h2>
           </div>
 
           <div>
@@ -314,25 +269,7 @@ export default function SignUpPage() {
             {errors.email && <p className="mt-2 text-sm text-red-600">{errors.email}</p>}
           </div>
 
-          <div className="mt-8 flex items-center justify-between gap-3">
-            <BackHomeLink href="/" label="Back home" />
-            <Button type="button" onClick={goNext}>Continue</Button>
-          </div>
-        </div>
-      );
-    }
-
-    if (step === 2) {
-      return (
-        <div className="w-full max-w-xl">
-          <div className="mb-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-safecrib-green">
-              Step 2 of 6
-            </p>
-            <h2 className="mt-3 text-3xl font-medium text-safecrib-black">Choose your display name</h2>
-          </div>
-
-          <div>
+          <div className="mt-5">
             <label htmlFor="displayName" className="mb-2 block text-sm font-medium text-safecrib-black">
               Display name
             </label>
@@ -348,23 +285,21 @@ export default function SignUpPage() {
           </div>
 
           <div className="mt-8 flex items-center justify-between gap-3">
-            <button type="button" onClick={goBack} className="text-sm font-medium text-black/65 hover:text-safecrib-black">
-              Back
-            </button>
+            <BackHomeLink href="/" label="Back home" />
             <Button type="button" onClick={goNext}>Continue</Button>
           </div>
         </div>
       );
     }
 
-    if (step === 3) {
+    if (step === 1) {
       return (
         <div className="w-full max-w-xl">
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-safecrib-green">
-              Step 3 of 6
+              Step 2 of 3
             </p>
-            <h2 className="mt-3 text-3xl font-medium text-safecrib-black">Create a password</h2>
+            <h2 className="mt-3 text-3xl font-medium text-safecrib-black">Secure your account</h2>
           </div>
 
           <div>
@@ -380,41 +315,9 @@ export default function SignUpPage() {
               className="w-full rounded-[8px] border border-black/15 bg-white px-4 py-3 text-base text-safecrib-black placeholder:text-black/35 focus:border-safecrib-green focus:outline-none"
             />
             {errors.password && <p className="mt-2 text-sm text-red-600">{errors.password}</p>}
-
-            <div className="mt-4 rounded-[8px] border border-black/10 bg-black/[0.02] p-3">
-              <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-black/55">Password requirements</p>
-              <ul className="space-y-2 text-sm text-black/70">
-                {passwordChecks.map((rule) => (
-                  <li key={rule.label} className="flex items-center gap-2">
-                    <span className={`inline-flex h-2.5 w-2.5 rounded-full ${rule.passed ? "bg-safecrib-green" : "bg-black/20"}`} />
-                    {rule.label}
-                  </li>
-                ))}
-              </ul>
-            </div>
           </div>
 
-          <div className="mt-8 flex items-center justify-between gap-3">
-            <button type="button" onClick={goBack} className="text-sm font-medium text-black/65 hover:text-safecrib-black">
-              Back
-            </button>
-            <Button type="button" onClick={goNext}>Continue</Button>
-          </div>
-        </div>
-      );
-    }
-
-    if (step === 4) {
-      return (
-        <div className="w-full max-w-xl">
-          <div className="mb-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-safecrib-green">
-              Step 4 of 6
-            </p>
-            <h2 className="mt-3 text-3xl font-medium text-safecrib-black">Confirm your password</h2>
-          </div>
-
-          <div>
+          <div className="mt-5">
             <label htmlFor="confirmPassword" className="mb-2 block text-sm font-medium text-safecrib-black">
               Confirm password
             </label>
@@ -443,7 +346,7 @@ export default function SignUpPage() {
       <div className="w-full max-w-xl">
         <div className="mb-6">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-safecrib-green">
-            Step 5 of 6
+            Step 3 of 3
           </p>
           <h2 className="mt-3 text-3xl font-medium text-safecrib-black">Review your details</h2>
         </div>
@@ -498,7 +401,7 @@ export default function SignUpPage() {
               <div className="mb-6">
                 <div className="mb-4 flex items-center justify-between text-[0.7rem] font-medium uppercase tracking-[0.18em] text-black/45">
                   <span>{currentStepLabel}</span>
-                  <span>{Math.min(step + 1, stepLabels.length)}/{stepLabels.length}</span>
+                  <span>{Math.min(step + 1, 3)}/3</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-black/5">
                   <div

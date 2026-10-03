@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
-import { VerifiedHomeIllustration } from "@/components/branding/VerifiedHomeIllustration";
 import { InstallButton } from "@/components/pwa/InstallButton";
 import { Button } from "@/components/ui/Button";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
@@ -18,7 +17,7 @@ function isValidEmail(value: string) {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [step, setStep] = useState<0 | 1>(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -34,7 +33,7 @@ export default function LoginPage() {
   const goNext = () => {
     setError("");
 
-    if (step === 1) {
+    if (step === 0) {
       if (!email.trim()) {
         setError("Email is required.");
         return;
@@ -46,7 +45,7 @@ export default function LoginPage() {
       }
     }
 
-    if (step === 2) {
+    if (step === 1) {
       if (!password) {
         setError("Password is required.");
         return;
@@ -56,7 +55,7 @@ export default function LoginPage() {
       return;
     }
 
-    setStep((current) => (current === 0 ? 1 : 2));
+    setStep(1);
   };
 
   const handleSubmit = async (event?: FormEvent) => {
@@ -134,7 +133,7 @@ export default function LoginPage() {
   const handleFormSubmit = (event: FormEvent) => {
     event.preventDefault();
 
-    if (step === 2) {
+    if (step === 1) {
       void handleSubmit();
       return;
     }
@@ -142,7 +141,7 @@ export default function LoginPage() {
     goNext();
   };
 
-  const title = step === 0 ? "Welcome back" : step === 1 ? "What is your email?" : "Enter your password";
+  const title = step === 0 ? "What is your email?" : "Enter your password";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(12,115,85,0.12),_transparent_30%),_linear-gradient(180deg,#ffffff_0%,#f3f7f4_100%)] px-4 py-6 sm:py-10">
@@ -152,30 +151,17 @@ export default function LoginPage() {
         </div>
 
         <div className="mt-6 flex items-center justify-between text-[0.7rem] font-medium uppercase tracking-[0.18em] text-black/45">
-          <span>{step === 0 ? "Welcome" : step === 1 ? "Email" : "Password"}</span>
-          <span>{step + 1}/3</span>
+          <span>{step === 0 ? "Email" : "Password"}</span>
+          <span>{step + 1}/2</span>
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/5">
-          <div className="h-full rounded-full bg-safecrib-green transition-all duration-300" style={{ width: `${((step + 1) / 3) * 100}%` }} />
+          <div className="h-full rounded-full bg-safecrib-green transition-all duration-300" style={{ width: `${((step + 1) / 2) * 100}%` }} />
         </div>
 
         <form onSubmit={handleFormSubmit} className="mt-8" noValidate>
           <h1 className="text-center text-3xl font-medium text-safecrib-black">{title}</h1>
 
           {step === 0 && (
-            <div className="mt-6">
-              <div className="overflow-hidden rounded-[14px] border border-black/10 bg-[#f7faf8] px-5 py-3 shadow-[0_12px_28px_rgba(11,12,14,0.04)]">
-                <div className="mx-auto max-w-[220px]">
-                  <VerifiedHomeIllustration />
-                </div>
-              </div>
-              <p className="mt-4 text-center text-sm leading-6 text-black/60">
-                Continue to your trusted accommodation space.
-              </p>
-            </div>
-          )}
-
-          {step === 1 && (
             <div className="mt-8">
               <label htmlFor="email" className="mb-2 block text-sm font-medium text-safecrib-black">Email address</label>
               <input
@@ -191,7 +177,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 1 && (
             <div className="mt-8">
               <label htmlFor="password" className="mb-2 block text-sm font-medium text-safecrib-black">Password</label>
               <div className="relative">
@@ -223,10 +209,10 @@ export default function LoginPage() {
             {step === 0 ? (
               <BackHomeLink href="/" label="Back home" />
             ) : (
-              <button type="button" onClick={() => { setError(""); setStep((current) => current === 2 ? 1 : 0); }} className="text-sm font-medium text-black/65 hover:text-safecrib-black">Back</button>
+              <button type="button" onClick={() => { setError(""); setStep(0); }} className="text-sm font-medium text-black/65 hover:text-safecrib-black">Back</button>
             )}
             <Button type="button" onClick={goNext} loading={isSubmitting}>
-              {step === 0 ? "Continue to login" : step === 2 ? "Log in" : "Continue"}
+              {step === 1 ? "Log in" : "Continue"}
             </Button>
           </div>
         </form>

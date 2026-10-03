@@ -3162,6 +3162,10 @@ html[data-theme="dark"] .safecrib-back-home:hover {
     display: flex;
   }
 
+  .md\:inline-flex {
+    display: inline-flex;
+  }
+
   .md\:hidden {
     display: none;
   }

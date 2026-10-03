@@ -1,9 +1,8 @@
 {
   "/api/backend/[...path]/route": "app/api/backend/[...path]/route.js",
   "/dashboard/page": "app/dashboard/page.js",
+  "/settings/page": "app/settings/page.js",
   "/connect/page": "app/connect/page.js",
-  "/profile/page": "app/profile/page.js",
   "/page/page": "app/page/page.js",
-  "/page/new/page": "app/page/new/page.js",
-  "/settings/page": "app/settings/page.js"
+  "/profile/page": "app/profile/page.js"
 }

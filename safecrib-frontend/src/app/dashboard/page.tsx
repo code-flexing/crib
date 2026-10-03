@@ -229,11 +229,26 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-wrap gap-4 text-sm font-medium">
             <Link href="/connect" className="text-safecrib-green hover:underline">Connect with your campus mates</Link>
-            {["UNVERIFIED", "STUDENT"].includes(String(profile?.role ?? "").toUpperCase()) && accountStatus === "not_submitted" && <Link href="/profile/complete" className="text-safecrib-green hover:underline">Complete student profile</Link>}
-            {["UNVERIFIED", "STUDENT"].includes(String(profile?.role ?? "").toUpperCase()) && accountStatus === "rejected" && <Link href="/profile/complete" className="text-safecrib-green hover:underline">Update rejected profile</Link>}
             <Link href={pageStatus === "none" ? "/page/new" : "/page"} className="text-safecrib-green hover:underline">{pageStatus === "none" ? "Create a provider Page" : "View my Page"}</Link>
           </div>
         </div>
+        {["UNVERIFIED", "STUDENT"].includes(String(profile?.role ?? "").toUpperCase()) && <section className="mt-6 flex flex-col gap-4 rounded-2xl border border-safecrib-green/15 bg-white p-5 shadow-[0_12px_30px_rgba(11,12,14,0.04)] sm:flex-row sm:items-center sm:justify-between sm:p-6" aria-label="Student profile">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Student profile</p>
+            <h2 className="mt-1 text-lg font-semibold text-safecrib-black">
+              {accountStatus === "pending" ? "Your profile is under review" : accountStatus === "approved" ? "Your student profile is complete" : accountStatus === "rejected" ? "Update your student profile" : "Complete your student profile"}
+            </h2>
+            <p className="mt-1 text-sm leading-5 text-black/55">
+              {accountStatus === "pending" ? "You can check your submission status and review details." : accountStatus === "approved" ? "Your verified student details are available on your profile." : "Add your student details and submit them for verification."}
+            </p>
+          </div>
+          <Link
+            href={accountStatus === "approved" ? "/profile" : "/profile/complete"}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-safecrib-green px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0a5f47] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green"
+          >
+            {accountStatus === "pending" ? "View submission" : accountStatus === "approved" ? "View profile" : accountStatus === "rejected" ? "Update profile" : "Complete profile"}
+          </Link>
+        </section>}
         {listings.length === 0 && <div className="mt-8 flex min-h-64 items-center justify-center rounded-xl border border-black/10 bg-white px-5 py-8 sm:min-h-72" aria-label="No listings are available yet"><EmptyListingsIllustration /></div>}
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {listings.map((listing) => {

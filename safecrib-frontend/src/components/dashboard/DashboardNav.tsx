@@ -71,7 +71,7 @@ export function DashboardNav({ onCreatePage, pageStatus, canManagePage = true, s
   }, []);
 
   const accountName = getDisplayName(navUser) || getAuthenticatedDisplayName() || "Your profile";
-  const profileLinkClass = `inline-flex items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green ${pathname === "/profile" ? "ring-2 ring-safecrib-green ring-offset-2" : ""}`;
+  const profileLinkClass = `inline-flex items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green ${pathname === "/dashboard" ? "hidden md:inline-flex" : ""} ${pathname === "/profile" ? "ring-2 ring-safecrib-green ring-offset-2" : ""}`;
 
   return (
     <header className="border-b border-black/10 bg-safecrib-white md:sticky md:top-0 md:z-40">

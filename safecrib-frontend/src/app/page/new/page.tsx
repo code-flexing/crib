@@ -118,7 +118,7 @@ export default function NewProviderPage() {
     ]).then(async ([user, providerPage, pendingUploads]) => {
       setUser(user);
       const role = String(user.role ?? "").toUpperCase();
-      if (["STUDENT", "UNVERIFIED"].includes(role)) {
+      if (role === "STUDENT") {
         const profileStatus = await apiFetch<unknown>("/api/v1/student-profiles/status").then(unwrapData<unknown>);
         const accountStatus = normalizeAccountStatus(profileStatus);
         setStudentStatus(accountStatus);

@@ -63,7 +63,7 @@ export default function ProviderWorkspacePage() {
           });
       }
       let currentStudentStatus: AccountStatus = "not_submitted";
-      if (["UNVERIFIED", "STUDENT"].includes(role)) {
+      if (role === "STUDENT") {
         const statusResponse = unwrapData<unknown>(
           await apiFetch<unknown>("/api/v1/student-profiles/status"),
         );
@@ -73,7 +73,7 @@ export default function ProviderWorkspacePage() {
         if (status === "pending") return;
       }
       if (!page) {
-        const requiresStudentProfile = ["UNVERIFIED", "STUDENT"].includes(role)
+        const requiresStudentProfile = role === "STUDENT"
           && currentStudentStatus === "not_submitted";
         router.replace(requiresStudentProfile
           ? "/profile/complete?reason=provider-workspace"
@@ -103,10 +103,7 @@ export default function ProviderWorkspacePage() {
     return result;
   }, {});
 
-  const missingStudentProfile = !providerPage
-    && ["UNVERIFIED", "STUDENT"].includes(String(user?.role ?? "").toUpperCase())
-    && studentStatus === "not_submitted";
-  if (loading || missingStudentProfile) return <PageLoader label={missingStudentProfile ? "Taking you to profile setup" : "Loading provider workspace"} />;
+  if (loading) return <PageLoader label="Loading provider workspace" />;
 
   const providerRole = ["AGENT", "LANDLORD"].includes(String(user?.role ?? "").toUpperCase());
   const studentReviewPending = studentStatus === "pending";

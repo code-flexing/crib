@@ -30,10 +30,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="safecrib-theme-frame bg-safecrib-white font-sans text-safecrib-black antialiased">
-        <Suspense fallback={null}>
-          <InitialPageLoader />
-        </Suspense>
         <ThemeProvider>
+          <Suspense fallback={null}>
+            <InitialPageLoader />
+          </Suspense>
           <PWAProvider>
             <Analytics />
             <NetworkMonitor />

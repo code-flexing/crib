@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
-import { ApiError, apiFetch, cachedApiFetch, cachedCurrentUser, primeCurrentUserCache, resolveMediaUrl, unwrapData, uploadDocument } from "@/lib/api";
+import { ApiError, apiFetch, cachedApiFetch, cachedCurrentUser, primeCurrentUserCache, resolveMediaUrl, subscribeClientCacheUpdates, unwrapData, uploadDocument } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { useTheme, type ThemeMode } from "@/components/theme/ThemeProvider";
 
@@ -33,6 +33,16 @@ export function AccountSettingsPanel({ heading = "Account details" }: { heading?
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    const unsubscribeCache = subscribeClientCacheUpdates(({ path, value }) => {
+      if (path !== "/api/v1/users/me" && path !== "/api/v1/auth/me") return;
+      const currentAccount = unwrapData<Account | null>(value);
+      if (!currentAccount) return;
+      setAccount(currentAccount);
+      setDisplayName(nameFrom(currentAccount.displayName));
+      if (currentAccount.profilePicture) {
+        void resolveMediaUrl(currentAccount.profilePicture).then(setAvatarUrl);
+      }
+    });
     void cachedCurrentUser<Account>().then(async (currentAccount) => {
       setAccount(currentAccount);
       setDisplayName(nameFrom(currentAccount.displayName));
@@ -48,6 +58,7 @@ export function AccountSettingsPanel({ heading = "Account details" }: { heading?
     }).catch((loadError: unknown) => {
       setError(loadError instanceof Error ? loadError.message : "We could not load account settings.");
     });
+    return unsubscribeCache;
   }, []);
 
   const updateProfilePicture = async (event: ChangeEvent<HTMLInputElement>) => {

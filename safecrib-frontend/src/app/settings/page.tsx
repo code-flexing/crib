@@ -8,7 +8,7 @@ import { SettingsSignOutButton } from "@/components/settings/SettingsSignOutButt
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { Button } from "@/components/ui/Button";
 import { VerificationOverview } from "@/components/verification/VerificationOverview";
-import { apiFetch, clearSession, getCurrentUser, isUnauthorizedError, normalizeAccountStatus, unwrapData, type AccountStatus } from "@/lib/api";
+import { apiFetch, cachedCurrentUser, clearSession, isUnauthorizedError, normalizeAccountStatus, subscribeClientCacheUpdates, unwrapData, type AccountStatus } from "@/lib/api";
 
 type User = {
   email?: string;
@@ -29,18 +29,31 @@ export default function SettingsPage() {
     }
 
     let active = true;
-    void getCurrentUser<User>().then(async (currentUser) => {
+    const unsubscribeCache = subscribeClientCacheUpdates(({ path, value }) => {
+      if (path !== "/api/v1/users/me" && path !== "/api/v1/auth/me") return;
+      const currentUser = unwrapData<User | null>(value);
+      if (!currentUser) return;
+      setUser(currentUser);
+      if (["UNVERIFIED", "STUDENT"].includes(String(currentUser.role ?? "").toUpperCase())) {
+        setStatus(normalizeAccountStatus(currentUser.studentProfileStatus));
+        void apiFetch<unknown>("/api/v1/student-profiles/status")
+          .then(unwrapData<unknown>)
+          .then(normalizeAccountStatus)
+          .then(setStatus)
+          .catch(() => undefined);
+      }
+    });
+    void cachedCurrentUser<User>().then(async (currentUser) => {
       if (!active) return;
       setUser(currentUser);
       const role = String(currentUser.role ?? "").toUpperCase();
+      setStatus(normalizeAccountStatus(currentUser.studentProfileStatus));
       if (["UNVERIFIED", "STUDENT"].includes(role)) {
-        const latestStatus = await apiFetch<unknown>("/api/v1/student-profiles/status")
+        void apiFetch<unknown>("/api/v1/student-profiles/status")
           .then(unwrapData<unknown>)
           .then(normalizeAccountStatus)
-          .catch(() => normalizeAccountStatus(currentUser.studentProfileStatus));
-        if (active) setStatus(latestStatus);
-      } else {
-        setStatus(normalizeAccountStatus(currentUser.studentProfileStatus));
+          .then((latestStatus) => { if (active) setStatus(latestStatus); })
+          .catch(() => undefined);
       }
     }).catch((loadError: unknown) => {
       if (active && isUnauthorizedError(loadError)) {
@@ -48,7 +61,7 @@ export default function SettingsPage() {
         router.replace("/login?reason=session-expired");
       }
     });
-    return () => { active = false; };
+    return () => { active = false; unsubscribeCache(); };
   }, [router]);
 
   const role = String(user?.role ?? "").toUpperCase();

@@ -8,7 +8,7 @@ import { PageLoader } from "@/components/loading/PageLoader";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { apiFetch, cachedApiFetch, clearSession, getCachedCurrentUser, isUnauthorizedError, resolveMediaUrl, unwrapData } from "@/lib/api";
+import { apiFetch, cachedApiFetch, clearSession, getCachedCurrentUser, isUnauthorizedError, resolveMediaUrl, subscribeClientCacheUpdates, unwrapData } from "@/lib/api";
 
 type Listing = {
   id: string;
@@ -98,7 +98,21 @@ export default function PublicProfilePage() {
     }
 
     let active = true;
-    void cachedApiFetch<unknown>(`/api/v1/users/${encodeURIComponent(profileId)}/public-profile`)
+    const publicProfilePath = `/api/v1/users/${encodeURIComponent(profileId)}/public-profile`;
+    const verificationPath = `/api/v1/trust/users/${encodeURIComponent(profileId)}/verification-stage`;
+    const unsubscribeCache = subscribeClientCacheUpdates(({ path, value }) => {
+      if (path === publicProfilePath) {
+        const refreshedProfile = unwrapData<PublicProfile>(value);
+        if (!refreshedProfile) return;
+        setProfile(refreshedProfile);
+        void resolveMediaUrl(refreshedProfile.profilePicture).then((pictureUrl) => {
+          if (active) setAvatarUrl(pictureUrl);
+        });
+      } else if (path === verificationPath) {
+        setVerification(normalizeVerificationStage(value));
+      }
+    });
+    void cachedApiFetch<unknown>(publicProfilePath)
       .then((response) => unwrapData<PublicProfile>(response))
       .then((publicProfile) => {
         if (!active) return;
@@ -120,13 +134,13 @@ export default function PublicProfilePage() {
         }
       });
 
-    void cachedApiFetch<unknown>(`/api/v1/trust/users/${encodeURIComponent(profileId)}/verification-stage`)
+    void cachedApiFetch<unknown>(verificationPath)
       .then(normalizeVerificationStage)
       .then((verificationStage) => { if (active) setVerification(verificationStage); })
       .catch((verificationLoadError: unknown) => {
         if (active) setVerificationError(verificationLoadError instanceof Error ? verificationLoadError.message : "Verification badge could not be loaded.");
       });
-    return () => { active = false; };
+    return () => { active = false; unsubscribeCache(); };
   }, [profileId, router]);
 
   const toggleFollow = async (target: "user" | "page") => {

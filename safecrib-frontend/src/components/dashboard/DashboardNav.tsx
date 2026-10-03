@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { SafeCribLogo } from "@/components/branding/SafeCribLogo";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { Icon, type IconName } from "@/components/ui/Icon";
-import { cachedApiFetch, displayName as getDisplayName, getAuthenticatedDisplayName, getCachedCurrentUser, logoutSession, resolveMediaUrl, unwrapData } from "@/lib/api";
+import { cachedApiFetch, displayName as getDisplayName, getAuthenticatedDisplayName, getCachedCurrentUser, logoutSession, resolveMediaUrl, subscribeClientCacheUpdates, unwrapData } from "@/lib/api";
 
 type DashboardNavProps = {
   onCreatePage: () => void;
@@ -41,6 +41,24 @@ export function DashboardNav({ onCreatePage, pageStatus, canManagePage = true, s
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+    const resolveAvatar = async (user: NavUser) => {
+      let reference = user.profilePicture;
+      if (!reference) {
+        const role = String(user.role ?? "").toUpperCase();
+        const legacyAvatarPath = ["UNVERIFIED", "STUDENT"].includes(role)
+          ? "/api/v1/student-profiles/me"
+          : ["AGENT", "LANDLORD"].includes(role)
+            ? "/api/v1/provider-pages/me"
+            : null;
+        if (legacyAvatarPath) {
+          const profile = await cachedApiFetch<unknown>(legacyAvatarPath).catch(() => null);
+          reference = unwrapData<{ profilePicture?: string } | null>(profile)?.profilePicture;
+        }
+      }
+      return resolveMediaUrl(reference);
+    };
+
     const cachedUser = getCachedCurrentUser<NavUser>();
     if (cachedUser) setNavUser(cachedUser);
     else {
@@ -48,27 +66,25 @@ export function DashboardNav({ onCreatePage, pageStatus, canManagePage = true, s
       if (tokenName) setNavUser({ displayName: tokenName });
     }
 
-    let active = true;
-    const role = String(cachedUser?.role ?? "").toUpperCase();
-    const legacyAvatarPath = ["UNVERIFIED", "STUDENT"].includes(role)
-      ? "/api/v1/student-profiles/me"
-      : ["AGENT", "LANDLORD"].includes(role)
-        ? "/api/v1/provider-pages/me"
-        : null;
-    void (async () => {
-      let reference = cachedUser?.profilePicture;
-      if (!reference && legacyAvatarPath) {
-        const profile = await cachedApiFetch<unknown>(legacyAvatarPath);
-        const profileData = unwrapData<{ profilePicture?: string } | null>(profile);
-        reference = profileData?.profilePicture;
+    if (cachedUser) {
+      void resolveAvatar(cachedUser).then((url) => { if (active) setAvatarUrl(url); });
+    }
+    const unsubscribeCache = subscribeClientCacheUpdates(({ path, value }) => {
+      if (path === "/api/v1/users/me" || path === "/api/v1/auth/me") {
+        const updatedUser = unwrapData<NavUser | null>(value);
+        if (!updatedUser) return;
+        setNavUser(updatedUser);
+        void resolveAvatar(updatedUser).then((url) => { if (active) setAvatarUrl(url); });
+        return;
       }
-      return resolveMediaUrl(reference);
-    })().then((url) => {
-      if (active) setAvatarUrl(url);
-    }).catch(() => {
-      if (active) setAvatarUrl(null);
+      if (path === "/api/v1/student-profiles/me" || path === "/api/v1/provider-pages/me") {
+        const profile = unwrapData<{ profilePicture?: string } | null>(value);
+        if (profile?.profilePicture) {
+          void resolveMediaUrl(profile.profilePicture).then((url) => { if (active) setAvatarUrl(url); });
+        }
+      }
     });
-    return () => { active = false; };
+    return () => { active = false; unsubscribeCache(); };
   }, []);
 
   const accountName = getDisplayName(navUser) || getAuthenticatedDisplayName() || "Your profile";

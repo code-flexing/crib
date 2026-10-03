@@ -11,7 +11,7 @@ import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { apiFetch, cachedApiFetch, clearClientCache, displayName, getAuthenticatedDisplayName, getCachedCurrentUser, getCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, primeCurrentUserCache, resolveMediaUrl, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
+import { apiFetch, cachedApiFetch, cachedCurrentUser, clearClientCache, displayName, getAuthenticatedDisplayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, primeCurrentUserCache, resolveMediaUrl, subscribeClientCacheUpdates, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
 
 type Listing = { id: string; ownerId?: string; title?: string; description?: string; price?: number; address?: string; campus?: string; photos?: string[]; images?: string[]; likeCount?: number; viewCount?: number; followedPage?: boolean; likedByCurrentUser?: boolean; providerRecommendationCount?: number; providerTrustScore?: number | null; providerActiveDays?: number; recommendationScore?: number };
 type Profile = { id?: string; displayName?: unknown; email?: string; role?: string; profilePicture?: string; studentProfileStatus?: unknown; studentProfile?: { profilePicture?: string }; verificationStage?: unknown };
@@ -48,6 +48,63 @@ export default function DashboardPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [openSupportCount, setOpenSupportCount] = useState(0);
 
+  useEffect(() => subscribeClientCacheUpdates(({ path, value }) => {
+    if (path === "/api/v1/users/me" || path === "/api/v1/auth/me") {
+      const currentUser = unwrapData<Profile | null>(value);
+      if (!currentUser) return;
+      setProfile({ ...currentUser, displayName: displayName(currentUser) || getAuthenticatedDisplayName() });
+      if (["STUDENT", "UNVERIFIED"].includes(String(currentUser.role ?? "").toUpperCase())) {
+        setAccountStatus(normalizeAccountStatus(currentUser.studentProfileStatus));
+      }
+      const picture = currentUser.profilePicture ?? currentUser.studentProfile?.profilePicture;
+      if (picture) void resolveMediaUrl(picture).then(setProfileImage);
+      return;
+    }
+
+    if (path === "/api/v1/student-profiles/me") {
+      const student = unwrapData<StudentProfile>(value);
+      const currentUser = getCachedCurrentUser<Profile>();
+      const picture = currentUser?.profilePicture ?? student?.profilePicture;
+      if (picture) void resolveMediaUrl(picture).then(setProfileImage);
+      return;
+    }
+
+    if (path === "/api/v1/provider-pages/me") {
+      const page = unwrapData<ProviderPage>(value);
+      setPageStatus(normalizePageStatus(page?.status));
+      const currentUser = getCachedCurrentUser<Profile>();
+      const picture = currentUser?.profilePicture ?? page?.profilePicture;
+      if (picture) void resolveMediaUrl(picture).then(setProfileImage);
+      return;
+    }
+
+    if (path === "/api/v1/listings") {
+      const listings = unwrapData<Listing[]>(value);
+      setListings(Array.isArray(listings) ? listings : []);
+      return;
+    }
+
+    if (path === "/api/v1/listings/bookmarks") {
+      const bookmarks = unwrapData<Listing[]>(value);
+      setBookmarkedIds(Array.isArray(bookmarks) ? bookmarks.map((listing) => listing.id) : []);
+      return;
+    }
+
+    if (path === "/api/v1/trust/me/recommendations") {
+      const recommendations = unwrapData<string[]>(value);
+      setRecommendedProviderIds(Array.isArray(recommendations) ? recommendations : []);
+      setRecommendationsLoaded(true);
+      return;
+    }
+
+    if (path === "/api/v1/support/conversations") {
+      const conversations = unwrapData<unknown[]>(value);
+      setOpenSupportCount(Array.isArray(conversations)
+        ? conversations.filter((conversation) => typeof conversation === "object" && conversation !== null && "status" in conversation && String(conversation.status).toUpperCase() === "OPEN").length
+        : 0);
+    }
+  }), []);
+
   useEffect(() => {
     if (!localStorage.getItem("safecrib_access_token")) {
       router.replace("/login");
@@ -63,7 +120,7 @@ export default function DashboardPage() {
       if (tokenName) setProfile({ displayName: tokenName });
     }
 
-    void getCurrentUser<Profile>().then(async (currentUser) => {
+    void cachedCurrentUser<Profile>().then(async (currentUser) => {
       let user = currentUser;
       if (!displayName(user)) user = { ...user, displayName: resolveAccountName(user) };
       primeCurrentUserCache(user);
@@ -79,6 +136,12 @@ export default function DashboardPage() {
         }
       }
       const studentMode = ["STUDENT", "UNVERIFIED"].includes(role);
+      const studentStatusRequest = studentMode
+        ? apiFetch<unknown>("/api/v1/student-profiles/status")
+            .then(unwrapData<unknown>)
+            .then(normalizeAccountStatus)
+            .catch(() => null)
+        : Promise.resolve(null);
       const verificationRequest = ["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)
         ? apiFetch<unknown>("/api/v1/trust/me/verification-stage")
             .then(normalizeVerificationStage)
@@ -87,9 +150,8 @@ export default function DashboardPage() {
       void verificationRequest.then((stage) => {
         setVerification(stage);
       });
-      const [studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, recommendations] = await Promise.all([
+      const [studentProfile, providerPage, homes, bookmarks, conversations, recommendations] = await Promise.all([
         studentMode ? cachedApiFetch<StudentProfile>("/api/v1/student-profiles/me").catch(() => null) : Promise.resolve(null),
-        studentMode ? apiFetch<unknown>("/api/v1/student-profiles/status").then(unwrapData<unknown>).catch(() => null) : Promise.resolve(null),
         cachedApiFetch<ProviderPage>("/api/v1/provider-pages/me").catch(() => null),
         cachedApiFetch<Listing[]>("/api/v1/listings").catch(() => []),
         role === "STUDENT" ? cachedApiFetch<Listing[]>("/api/v1/listings/bookmarks").catch(() => []) : Promise.resolve([]),
@@ -106,17 +168,27 @@ export default function DashboardPage() {
               })
           : Promise.resolve([]),
       ]);
-              if (studentStatus !== null) clearClientCache("/api/v1/student-profiles/status");
-      return { user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, recommendations };
-    }).then(async ({ user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, recommendations }) => {
+      return { user, studentProfile, studentStatusRequest, providerPage, homes, bookmarks, conversations, recommendations };
+    }).then(({ user, studentProfile, studentStatusRequest, providerPage, homes, bookmarks, conversations, recommendations }) => {
       setProfile({ ...user, displayName: displayName(user) || getAuthenticatedDisplayName() });
       const role = String(user.role ?? "").toUpperCase();
-      const profileStatus = studentStatus ?? user.studentProfileStatus;
+      const studentMode = ["STUDENT", "UNVERIFIED"].includes(role);
+      const profileStatus = normalizeAccountStatus(user.studentProfileStatus);
       const providerVerified = ["AGENT", "LANDLORD"].includes(role) && String(providerPage?.status ?? "").toUpperCase() === "VERIFIED";
       const studentProfileData = unwrapData<StudentProfile>(studentProfile);
       const pictureReference = user.profilePicture ?? user.studentProfile?.profilePicture ?? studentProfileData?.profilePicture ?? providerPage?.profilePicture;
-      setProfileImage(pictureReference ? await resolveMediaUrl(pictureReference) : null);
       setAccountStatus(providerVerified ? "approved" : ["AGENT", "LANDLORD"].includes(role) ? "pending" : normalizeAccountStatus(profileStatus));
+      if (studentMode) {
+        void studentStatusRequest.then((latestStatus) => {
+          if (!latestStatus) return;
+          clearClientCache("/api/v1/student-profiles/status");
+          setAccountStatus(latestStatus);
+        });
+      }
+      setProfileImage(null);
+      if (pictureReference) {
+        void resolveMediaUrl(pictureReference).then(setProfileImage).catch(() => setProfileImage(null));
+      }
       setPageStatus(normalizePageStatus(providerPage?.status));
       setListings(Array.isArray(homes) ? homes : []);
       setBookmarkedIds(Array.isArray(bookmarks) ? bookmarks.map((listing) => listing.id) : []);

@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Suspense } from "react";
 import { NetworkMonitor } from "@/components/network/NetworkMonitor";
-import { InitialPageLoader } from "@/components/loading/InitialPageLoader";
 import { PWAProvider } from "@/components/pwa/PWAProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
@@ -31,9 +29,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="safecrib-theme-frame bg-safecrib-white font-sans text-safecrib-black antialiased">
         <ThemeProvider>
-          <Suspense fallback={null}>
-            <InitialPageLoader />
-          </Suspense>
           <PWAProvider>
             <Analytics />
             <NetworkMonitor />

@@ -96,6 +96,38 @@ export async function getCurrentUser<T>() {
 
 const clientCachePrefix = "safecrib_cache:";
 const clientCacheTtlMs = 60_000;
+const clientCacheUpdatedEvent = "safecrib:cache-updated";
+
+export type ClientCacheUpdate = { path: string; value: unknown };
+
+export function subscribeClientCacheUpdates(listener: (update: ClientCacheUpdate) => void) {
+  if (typeof window === "undefined") return () => undefined;
+  const handleUpdate = (event: Event) => {
+    const detail = (event as CustomEvent<ClientCacheUpdate>).detail;
+    if (detail && typeof detail.path === "string") listener(detail);
+  };
+  const handleStorage = (event: StorageEvent) => {
+    if (!event.key?.startsWith(clientCachePrefix) || event.key.endsWith(":updatedAt")) return;
+    let value: unknown = null;
+    try {
+      value = event.newValue === null ? null : JSON.parse(event.newValue) as unknown;
+    } catch {
+      value = null;
+    }
+    listener({ path: event.key.slice(clientCachePrefix.length), value });
+  };
+  window.addEventListener(clientCacheUpdatedEvent, handleUpdate);
+  window.addEventListener("storage", handleStorage);
+  return () => {
+    window.removeEventListener(clientCacheUpdatedEvent, handleUpdate);
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+
+function notifyClientCacheUpdated(path: string, value: unknown) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<ClientCacheUpdate>(clientCacheUpdatedEvent, { detail: { path, value } }));
+}
 
 function cacheKey(path: string) {
   return `${clientCachePrefix}${path}`;
@@ -130,6 +162,7 @@ function writeClientCache(path: string, value: unknown) {
   try {
     localStorage.setItem(cacheKey(path), JSON.stringify(value));
     localStorage.setItem(cacheUpdatedAtKey(path), String(Date.now()));
+    notifyClientCacheUpdated(path, value);
   } catch { /* Storage may be unavailable or full. */ }
 }
 
@@ -548,7 +581,7 @@ export async function resolveMediaUrl(reference: unknown): Promise<string | null
   if (/^(https?:|data:|blob:)/.test(reference)) return reference;
 
   try {
-    const response = await cachedApiFetch<unknown>(`/api/v1/media/${encodeURIComponent(reference)}/access`);
+    const response = await apiFetch<unknown>(`/api/v1/media/${encodeURIComponent(reference)}/access`, { cache: "no-store" });
     const mediaData = unwrapData<unknown>(response);
     if (typeof mediaData === "string") return mediaData;
     if (typeof mediaData === "object" && mediaData !== null) {

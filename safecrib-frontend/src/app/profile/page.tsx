@@ -9,7 +9,7 @@ import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { PageLoader } from "@/components/loading/PageLoader";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { apiFetch, cachedApiFetch, clearSession, displayName, getCachedCurrentUser, getCurrentUser, isUnauthorizedError, normalizeAccountStatus, resolveMediaUrl, unwrapData } from "@/lib/api";
+import { apiFetch, cachedApiFetch, cachedCurrentUser, clearSession, displayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, resolveMediaUrl, subscribeClientCacheUpdates, unwrapData } from "@/lib/api";
 
 type User = {
   id?: string;
@@ -137,6 +137,41 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  useEffect(() => subscribeClientCacheUpdates(({ path, value }) => {
+    if (path === "/api/v1/users/me" || path === "/api/v1/auth/me") {
+      const currentUser = unwrapData<User | null>(value);
+      if (currentUser) {
+        setUser(currentUser);
+        if (currentUser.profilePicture) {
+          void resolveMediaUrl(currentUser.profilePicture).then(setAvatarUrl);
+        }
+      }
+      return;
+    }
+    if (path === "/api/v1/student-profiles/me") {
+      const studentProfile = unwrapData<StudentProfile>(value);
+      setStudent(studentProfile);
+      const picture = getCachedCurrentUser<User>()?.profilePicture ?? studentProfile?.profilePicture;
+      if (picture) void resolveMediaUrl(picture).then(setAvatarUrl);
+      return;
+    }
+    if (path === "/api/v1/provider-pages/me") {
+      const providerPage = unwrapData<ProviderPage>(value);
+      setProvider(providerPage);
+      const picture = getCachedCurrentUser<User>()?.profilePicture ?? providerPage?.profilePicture;
+      if (picture) void resolveMediaUrl(picture).then(setAvatarUrl);
+      return;
+    }
+    if (path === "/api/v1/listings/my") {
+      const ownListings = unwrapData<Listing[]>(value);
+      setListings(Array.isArray(ownListings) ? ownListings : []);
+      return;
+    }
+    if (path === "/api/v1/users/me/engagement-stats") {
+      setStudentEngagement(unwrapData<StudentEngagement | null>(value));
+    }
+  }), []);
+
   useEffect(() => {
     if (!localStorage.getItem("safecrib_access_token")) {
       router.replace("/login");
@@ -150,7 +185,7 @@ export default function ProfilePage() {
     }
 
     let active = true;
-    void getCurrentUser<User>().then(async (currentUser) => {
+    void cachedCurrentUser<User>().then(async (currentUser) => {
       if (!active) return;
       setUser(currentUser);
       const role = String(currentUser.role ?? "").toUpperCase();
@@ -188,8 +223,13 @@ export default function ProfilePage() {
       setStudentEngagement(studentStats);
       setProviderStats(providerDiscovery);
       const picture = currentUser.profilePicture ?? studentProfile?.profilePicture ?? providerPage?.profilePicture;
-      const resolvedPicture = await resolveMediaUrl(picture);
-      if (active) setAvatarUrl(resolvedPicture);
+      if (picture) {
+        void resolveMediaUrl(picture).then((resolvedPicture) => {
+          if (active) setAvatarUrl(resolvedPicture);
+        }).catch(() => {
+          if (active) setAvatarUrl(null);
+        });
+      }
     }).catch((loadError: unknown) => {
       if (isUnauthorizedError(loadError)) {
         clearSession();

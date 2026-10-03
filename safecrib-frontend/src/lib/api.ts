@@ -433,10 +433,13 @@ export async function uploadDocument(file: File, purpose: UploadPurpose, entityI
   body.append("purpose", purpose);
   if (entityId) body.append("entityId", entityId);
 
-  const response = unwrapData<{ media?: { id?: string } }>(await apiFetch<unknown>("/api/v1/media/upload", {
+  const response = unwrapData<{ media?: { id?: string }; url?: string }>(await apiFetch<unknown>("/api/v1/media/upload", {
     method: "POST",
     body,
   }));
+  if (purpose === "AVATAR" && typeof response.url === "string" && /^https?:\/\//.test(response.url)) {
+    return response.url;
+  }
   if (typeof response.media?.id !== "string" || !response.media.id) {
     throw new Error(`The ${purpose.toLowerCase().replaceAll("_", " ")} upload did not return a media reference.`);
   }

@@ -229,10 +229,7 @@ export default function Home() {
           </div>
           <div className="landing-campus relative -mx-2 mt-1 lg:mx-0 lg:mt-0">
             <CampusIllustration />
-            <div className="absolute bottom-5 left-3 hidden border-l-2 border-safecrib-green pl-3 text-xs leading-5 text-black/55 sm:block lg:bottom-8 lg:left-1">
-              <span className="block font-semibold text-safecrib-black">A campus is more than a pin.</span>
-              Walkways, study spots, and places to land.
-            </div>
+          
           </div>
         </div>
       </section>

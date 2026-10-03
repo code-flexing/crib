@@ -93,7 +93,7 @@ function SafeLinks({ links }: { links?: Record<string, string> }) {
 }
 
 function ProfileStat({ label, value }: { label: string; value: string | number }) {
-  return <div className="min-w-0 border-l border-white/15 pl-4 first:border-l-0 first:pl-0">
+  return <div className="min-w-[8.5rem] shrink-0 snap-start border-l border-white/15 pl-4 first:border-l-0 first:pl-0 sm:min-w-0 sm:shrink">
     <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/55">{label}</p>
     <p className="mt-1 truncate text-lg font-semibold text-white">{value}</p>
   </div>;
@@ -214,14 +214,14 @@ export default function ProfilePage() {
   const accountLabel = role === "UNVERIFIED" || role === "STUDENT" ? readable(studentStatus) : readable(role);
 
   return (
-    <main className="min-h-screen bg-[#f2f5f3] pb-24 md:pb-8">
+    <main className="min-h-screen overflow-x-hidden bg-[#f2f5f3] pb-24 md:pb-8">
       <DashboardNav onCreatePage={() => router.push("/page/new")} pageStatus="none" canManagePage={["AGENT", "LANDLORD", "ADMIN"].includes(role)} />
-      <section className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
+      <section className="mx-auto w-full max-w-6xl px-0 py-4 sm:px-8 sm:py-10">
         <div className="flex items-center justify-between gap-4">
-          <BackHomeLink />
-          <span className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-black/40 sm:block">Trust profile</span>
+          <div className="px-4 sm:px-0"><BackHomeLink /></div>
+          <span className="pr-4 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-black/40 sm:pr-0">Trust profile</span>
         </div>
-        <section className="relative mt-6 overflow-hidden rounded-[1.75rem] bg-[#123b2f] shadow-[0_26px_70px_rgba(10,54,40,0.2)]" aria-labelledby="profile-heading">
+        <section className="relative mt-4 overflow-hidden rounded-none bg-[#123b2f] shadow-[0_26px_70px_rgba(10,54,40,0.2)] sm:mt-6 sm:rounded-[1.75rem]" aria-labelledby="profile-heading">
           <div className="relative min-h-52 overflow-hidden px-5 pb-7 pt-6 sm:min-h-64 sm:px-8 sm:pt-8">
             <div aria-hidden="true" className="absolute -right-16 -top-28 h-80 w-80 rounded-full border border-white/15" />
             <div aria-hidden="true" className="absolute -right-2 -top-16 h-52 w-52 rounded-full border border-white/10" />
@@ -247,12 +247,12 @@ export default function ProfilePage() {
                   {dateLabel(user?.createdAt) && <span className="text-xs text-black/45">Member since {dateLabel(user?.createdAt)}</span>}
                 </div>
               </div>
-              <Link href="/settings" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-safecrib-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a5f47] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green">
+              <Link href="/settings" className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-safecrib-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0a5f47] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-safecrib-green sm:w-auto">
                 <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m12.5 3.5 4 4M4 16l3.5-.7L16.7 6a1.7 1.7 0 0 0-2.4-2.4L5.1 12.8 4 16Z" /><path d="M3.5 18h13" /></svg>
                 Edit profile
               </Link>
             </div>
-            <div className="mt-7 grid grid-cols-2 gap-4 rounded-2xl bg-[#123b2f] px-4 py-4 sm:grid-cols-4 sm:px-5">
+            <div className="mt-7 -mx-1 flex snap-x gap-6 overflow-x-auto rounded-2xl bg-[#123b2f] px-4 py-4 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-5">
               <ProfileStat label="Trust stage" value={verification ? readable(verification.stage) : "Building"} />
               <ProfileStat label="Followers" value={providerStats?.followerCount ?? user?.followerCount ?? 0} />
               <ProfileStat label={role === "STUDENT" ? "Interactions" : "Homes"} value={role === "STUDENT" ? studentEngagement?.totalInteractions ?? 0 : listings.length} />
@@ -263,8 +263,8 @@ export default function ProfilePage() {
 
         {error && <p role="alert" className="mt-6 border-l-4 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,.85fr)]">
-          <div className="min-w-0 space-y-10">
+        <div className="mt-8 grid gap-10 lg:mt-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,.85fr)]">
+          <div className="order-2 min-w-0 space-y-10 px-4 sm:px-0 lg:order-1">
             <section aria-labelledby="about-heading">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-safecrib-green">The person behind the profile</p>
               <div className="mt-2 flex items-end justify-between gap-4 border-b border-black/10 pb-4">
@@ -314,7 +314,7 @@ export default function ProfilePage() {
             </section>
           </div>
 
-          <aside className="min-w-0 space-y-5">
+          <aside className="order-1 min-w-0 space-y-5 px-4 sm:px-0 lg:order-2">
             <section className="overflow-hidden rounded-[1.5rem] bg-[#123b2f] p-6 text-white shadow-[0_18px_45px_rgba(10,54,40,0.16)]" aria-labelledby="trust-heading">
               <div className="flex items-start justify-between gap-4">
                 <div><p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#a8e7cb]">Trust snapshot</p><h2 id="trust-heading" className="mt-2 text-2xl font-semibold">{verification ? readable(verification.stage) : "Your trust journey"}</h2></div>

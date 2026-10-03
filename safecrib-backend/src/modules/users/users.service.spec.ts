@@ -12,8 +12,10 @@ describe('UserService.getPublicProfile', () => {
       role: 'AGENT',
       identityVerified: true,
       createdAt: new Date('2026-01-01'),
+      _count: { followers: 0, recommendationsReceived: 0 },
       studentProfile: null,
       providerPage: {
+        id: 'provider-page-id',
         displayName: 'Amina Homes',
         description: 'Homes near campus',
         providerType: 'AGENT',
@@ -22,7 +24,8 @@ describe('UserService.getPublicProfile', () => {
         verificationState: 'VERIFIED',
         verifiedAt: new Date('2026-02-01'),
         socialLinks: { website: 'https://example.com' },
-        listings: [{ id: 'listing-id', title: 'Campus apartment' }],
+        _count: { followers: 0 },
+        listings: [{ id: 'listing-id', title: 'Campus apartment', _count: { likes: 0, views: 0 } }],
       },
     });
     const service = new UserService({ user: { findUnique } } as unknown as PrismaService);

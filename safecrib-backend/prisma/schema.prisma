@@ -40,6 +40,16 @@ model User {
   bookmarks       Bookmark[]
   supportConversations SupportConversation[]
   supportMessages SupportMessage[]
+  recommendationsGiven ProviderRecommendation[] @relation("ProviderRecommendationAuthor")
+  recommendationsReceived ProviderRecommendation[] @relation("ProviderRecommendationProvider")
+  activityDays ProviderActivityDay[]
+  listingLikes ListingLike[]
+  listingComments ListingComment[]
+  followers UserFollow[] @relation("UserFollowed")
+  following UserFollow[] @relation("UserFollowing")
+  pageFollows PageFollow[]
+  commentMentions CommentMention[]
+  listingViews ListingView[]
 
   @@index([role])
   @@map("users")
@@ -237,6 +247,9 @@ model Listing {
   bookings Booking[]
   fraudReports FraudReport[]
   bookmarks Bookmark[]
+  likes ListingLike[]
+  comments ListingComment[]
+  views ListingView[]
   duplicateFlagsA DuplicateFlag[] @relation("DuplicateFlagsA")
   duplicateFlagsB DuplicateFlag[] @relation("DuplicateFlagsB")
 
@@ -286,6 +299,7 @@ model ProviderPage {
 
   owner    User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   listings Listing[]
+  followers PageFollow[]
 
   @@index([verificationState])
   @@map("provider_pages")
@@ -395,6 +409,118 @@ model Bookmark {
   @@unique([userId, listingId])
   @@index([userId, createdAt])
   @@map("bookmarks")
+}
+
+model ProviderRecommendation {
+  id            String   @id @default(uuid())
+  recommenderId String   @map("recommender_id")
+  providerId    String   @map("provider_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  recommender User @relation("ProviderRecommendationAuthor", fields: [recommenderId], references: [id], onDelete: Cascade)
+  provider    User @relation("ProviderRecommendationProvider", fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([recommenderId, providerId])
+  @@index([providerId, createdAt])
+  @@map("provider_recommendations")
+}
+
+model ProviderActivityDay {
+  id         String   @id @default(uuid())
+  providerId String   @map("provider_id")
+  activeDate DateTime @db.Date @map("active_date")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  provider User @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, activeDate])
+  @@index([providerId, activeDate])
+  @@map("provider_activity_days")
+}
+
+model ListingLike {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  listingId String   @map("listing_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@index([listingId, createdAt])
+  @@map("listing_likes")
+}
+
+model ListingComment {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  listingId String   @map("listing_id")
+  body      String
+  gifUrl    String?  @map("gif_url")
+  parentId  String?  @map("parent_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  parent  ListingComment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies ListingComment[] @relation("CommentReplies")
+  mentions CommentMention[]
+
+  @@index([listingId, parentId, createdAt])
+  @@map("listing_comments")
+}
+
+model CommentMention {
+  commentId String @map("comment_id")
+  userId String @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment ListingComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, userId])
+  @@index([userId, createdAt])
+  @@map("comment_mentions")
+}
+
+model UserFollow {
+  followerId String @map("follower_id")
+  followedId String @map("followed_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  follower User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  followed User @relation("UserFollowed", fields: [followedId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followedId])
+  @@index([followedId, createdAt])
+  @@map("user_follows")
+}
+
+model PageFollow {
+  followerId String @map("follower_id")
+  pageId String @map("page_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  follower User @relation(fields: [followerId], references: [id], onDelete: Cascade)
+  page ProviderPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, pageId])
+  @@index([pageId, createdAt])
+  @@map("page_follows")
+}
+
+model ListingView {
+  userId String @map("user_id")
+  listingId String @map("listing_id")
+  firstViewedAt DateTime @default(now()) @map("first_viewed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@id([userId, listingId])
+  @@index([listingId, firstViewedAt])
+  @@map("listing_views")
 }
 
 model Booking {

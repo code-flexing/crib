@@ -141,16 +141,21 @@ export class BookingsService {
         data: { status: 'SOLD' },
       });
 
-      await this.trustRecomputeQueue.add('recompute', {
-        userId: booking.studentId,
+      const listingOwner = await this.prisma.listing.findUnique({
+        where: { id: booking.listingId },
+        select: { ownerId: true },
       });
-
-      await this.trustRecomputeQueue.add('recompute', {
-        userId: (await this.prisma.listing.findUnique({
-          where: { id: booking.listingId },
-          select: { ownerId: true },
-        }))?.ownerId,
-      });
+      if (listingOwner?.ownerId) {
+        await this.prisma.trustEvent.create({
+          data: {
+            userId: listingOwner.ownerId,
+            eventType: 'BOOKING_SECURED',
+            weight: 20,
+            payload: { bookingId },
+          },
+        });
+        await this.trustRecomputeQueue.add('recompute', { userId: listingOwner.ownerId });
+      }
 
       return this.toResult(result);
     } catch (err) {
@@ -337,24 +342,6 @@ export class BookingsService {
           completedAt: new Date(),
         },
       });
-
-      await tx.trustEvent.create({
-        data: {
-          userId: booking.studentId,
-          eventType: 'BOOKING_COMPLETED',
-          weight: 5,
-        },
-      });
-
-      if (listing) {
-        await tx.trustEvent.create({
-          data: {
-            userId: listing.ownerId,
-            eventType: 'BOOKING_COMPLETED',
-            weight: 10,
-          },
-        });
-      }
 
       return updated;
     });

@@ -5,7 +5,7 @@ import type { TrustService } from '../trust/trust.service.js';
 import { AdminService } from './admin.service.js';
 
 describe('AdminService.reviewSubmission verification email', () => {
-  it('computes the badge stage immediately after approving a student profile', async () => {
+  it('falls back to the matching student email when a queued profile ID is stale', async () => {
     const tx = {
       adminReviewQueue: { update: vi.fn().mockResolvedValue({}) },
       auditLog: { create: vi.fn().mockResolvedValue({}) },
@@ -28,12 +28,14 @@ describe('AdminService.reviewSubmission verification email', () => {
         }),
       },
       studentProfile: {
-        findUnique: vi.fn().mockResolvedValue({
+        findFirst: vi.fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({
           id: 'profile-id',
           userId: 'user-id',
           status: 'PENDING',
           displayName: 'Student Name',
-        }),
+          }),
       },
       $transaction: vi.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx)),
     } as unknown as PrismaService;
@@ -47,6 +49,13 @@ describe('AdminService.reviewSubmission verification email', () => {
 
     await service.reviewSubmission('submission-id', 'admin-id', { status: 'APPROVED' });
 
+    expect(prisma.studentProfile.findFirst).toHaveBeenNthCalledWith(1, {
+      where: { id: 'profile-id', user: { email: 'student@example.com' } },
+    });
+    expect(prisma.studentProfile.findFirst).toHaveBeenNthCalledWith(2, {
+      where: { user: { email: 'student@example.com' } },
+      orderBy: { submittedAt: 'desc' },
+    });
     expect(trustService.getVerificationStage).toHaveBeenCalledWith('user-id');
     expect(emailQueue.add).toHaveBeenCalledWith(
       'profile-verification-email',

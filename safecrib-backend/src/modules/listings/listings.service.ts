@@ -9,12 +9,13 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import { IMAGE_HASH_QUEUE } from '../../infra/queue/queue.constants.js';
-import type { UpdateListingDto } from './dto/listing.dto.js';
+import type { CreateListingCommentDto, UpdateListingDto } from './dto/listing.dto.js';
 import type { SearchListingsDto } from './dto/listing.dto.js';
 import type { ListingResponse } from './dto/listing.dto.js';
 import type { Role } from '../../common/roles.decorator.js';
 import { ProviderPagesService } from '../provider-pages/provider-pages.service.js';
 import { MediaService } from '../media/services/media.service.js';
+import { computeProviderRecommendationScore } from '../trust/trust.service.js';
 import type { MediaPurpose, Prisma } from '@prisma/client';
 
 export interface CreateListingInput {
@@ -160,20 +161,37 @@ export class ListingsService {
     });
   }
 
-  async getListing(listingId: string): Promise<ListingResponse> {
+  async getListing(listingId: string, viewerId?: string): Promise<ListingResponse> {
     const listing = await this.prisma.listing.findUnique({
       where: { id: listingId },
-      include: this.listingInclude(),
+      include: this.listingInclude(viewerId),
     });
 
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
+    if (viewerId && listing.status === 'VERIFIED' && listing.ownerId !== viewerId) {
+      await this.prisma.listingView.createMany({
+        data: [{ userId: viewerId, listingId }],
+        skipDuplicates: true,
+      });
+    }
 
-    return this.toResponse(listing, listing.photos);
+    const response = this.toResponse(listing, listing.photos);
+    if (viewerId && listing.status === 'VERIFIED' && listing.ownerId !== viewerId) {
+      response.viewCount = await this.prisma.listingView.count({ where: { listingId } });
+    }
+    const signal = (await this.getProviderRankingSignals([listing.ownerId])).get(listing.ownerId);
+    if (signal) {
+      response.providerTrustScore = signal.trustScore;
+      response.providerActiveDays = signal.activeDays;
+      response.providerRecommendationCount = signal.recommendationCount;
+      response.recommendationScore = signal.recommendationScore;
+    }
+    return response;
   }
 
-  async searchListings(dto: SearchListingsDto): Promise<ListingResponse[]> {
+  async searchListings(dto: SearchListingsDto, viewerId?: string): Promise<ListingResponse[]> {
     const where: any = {
       status: 'VERIFIED',
     };
@@ -208,11 +226,25 @@ export class ListingsService {
 
     const listings = await this.prisma.listing.findMany({
       where,
-      include: this.listingInclude(),
+      include: this.listingInclude(viewerId),
       orderBy: { createdAt: 'desc' },
     });
 
-    return listings.map((l) => this.toResponse(l, l.photos));
+    const responses = listings.map((l) => this.toResponse(l, l.photos));
+    const signals = await this.getProviderRankingSignals([...new Set(responses.map((listing) => listing.ownerId))]);
+    for (const listing of responses) {
+      const signal = signals.get(listing.ownerId);
+      if (!signal) continue;
+      listing.providerTrustScore = signal.trustScore;
+      listing.providerActiveDays = signal.activeDays;
+      listing.providerRecommendationCount = signal.recommendationCount;
+      listing.recommendationScore = signal.recommendationScore;
+    }
+    return responses.sort((a, b) =>
+      Number(b.followedPage) - Number(a.followedPage) ||
+      b.recommendationScore - a.recommendationScore ||
+      b.createdAt.getTime() - a.createdAt.getTime(),
+    );
   }
 
   async getMyListings(userId: string): Promise<ListingResponse[]> {
@@ -249,6 +281,116 @@ export class ListingsService {
       orderBy: { createdAt: 'desc' },
     });
     return bookmarks.map(({ listing }) => this.toResponse(listing, listing.photos));
+  }
+
+  async likeListing(listingId: string, userId: string): Promise<{ liked: true }> {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { id: true, ownerId: true, status: true },
+    });
+    if (!listing || listing.status !== 'VERIFIED') throw new NotFoundException('Home not found');
+    if (listing.ownerId === userId) throw new ForbiddenException('You cannot like your own home');
+
+    await this.prisma.listingLike.upsert({
+      where: { userId_listingId: { userId, listingId } },
+      create: { userId, listingId },
+      update: {},
+    });
+    return { liked: true };
+  }
+
+  async unlikeListing(listingId: string, userId: string): Promise<{ liked: false }> {
+    await this.prisma.listingLike.deleteMany({ where: { userId, listingId } });
+    return { liked: false };
+  }
+
+  async getListingComments(listingId: string) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { id: true, status: true },
+    });
+    if (!listing || listing.status !== 'VERIFIED') throw new NotFoundException('Home not found');
+    return this.prisma.listingComment.findMany({
+      where: { listingId },
+      orderBy: { createdAt: 'asc' },
+      take: 500,
+      select: {
+        id: true,
+        body: true,
+        gifUrl: true,
+        parentId: true,
+        createdAt: true,
+        user: { select: { id: true, displayName: true, role: true } },
+        mentions: { select: { user: { select: { id: true, displayName: true } } } },
+      },
+    });
+  }
+
+  async addListingComment(listingId: string, userId: string, input: CreateListingCommentDto) {
+    const body = input.body?.trim() ?? '';
+    const gifUrl = input.gifUrl?.trim() || null;
+    if (!body && !gifUrl) throw new BadRequestException('Write text or attach a GIF');
+    if (gifUrl && !this.isAllowedGifUrl(gifUrl)) {
+      throw new BadRequestException('GIFs must be hosted by Tenor or GIPHY');
+    }
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { id: true, status: true },
+    });
+    if (!listing || listing.status !== 'VERIFIED') throw new NotFoundException('Home not found');
+    if (input.parentId) {
+      const parent = await this.prisma.listingComment.findFirst({
+        where: { id: input.parentId, listingId },
+        select: { id: true },
+      });
+      if (!parent) throw new NotFoundException('Parent comment not found on this home');
+    }
+    const mentionIds = [...new Set(input.mentionUserIds ?? [])].filter((id) => id !== userId);
+    if (mentionIds.length) {
+      const validUsers = await this.prisma.user.findMany({
+        where: {
+          id: { in: mentionIds },
+          OR: [
+            { role: 'STUDENT', studentProfile: { status: 'APPROVED' } },
+            { role: { in: ['AGENT', 'LANDLORD'] }, providerPage: { verificationState: 'VERIFIED' } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (validUsers.length !== mentionIds.length) {
+        throw new BadRequestException('One or more tagged users are unavailable');
+      }
+    }
+    const comment = await this.prisma.listingComment.create({
+      data: {
+        listingId,
+        userId,
+        body,
+        gifUrl,
+        parentId: input.parentId ?? null,
+        mentions: { create: mentionIds.map((mentionedUserId) => ({ userId: mentionedUserId })) },
+      },
+      select: {
+        id: true,
+        body: true,
+        gifUrl: true,
+        parentId: true,
+        createdAt: true,
+        user: { select: { id: true, displayName: true, role: true } },
+        mentions: { select: { user: { select: { id: true, displayName: true } } } },
+      },
+    });
+    return comment;
+  }
+
+  private isAllowedGifUrl(value: string): boolean {
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' &&
+        ['media.tenor.com', 'tenor.com', 'media.giphy.com', 'giphy.com'].includes(url.hostname.toLowerCase());
+    } catch {
+      return false;
+    }
   }
 
   async uploadPhoto(
@@ -477,10 +619,19 @@ export class ListingsService {
     );
   }
 
-  private listingInclude(): Prisma.ListingInclude {
+  private listingInclude(viewerId?: string): Prisma.ListingInclude {
     return {
       photos: true,
       video: { include: { media: { select: { id: true, durationSec: true } } } },
+      _count: { select: { likes: true, views: true } },
+      ...(viewerId ? { likes: { where: { userId: viewerId }, select: { id: true }, take: 1 } } : {}),
+      ...(viewerId ? {
+        providerPage: {
+          select: {
+            followers: { where: { followerId: viewerId }, select: { followerId: true }, take: 1 },
+          },
+        },
+      } : {}),
       bookings: {
         where: {
           OR: [
@@ -513,6 +664,14 @@ export class ListingsService {
           ? 'SECURED'
           : 'AVAILABLE',
       ownerId: listing.ownerId,
+      likeCount: listing._count?.likes ?? 0,
+      likedByCurrentUser: Boolean(listing.likes?.length),
+      providerTrustScore: 0,
+      providerActiveDays: 0,
+      providerRecommendationCount: 0,
+      recommendationScore: 0,
+      viewCount: listing._count?.views ?? 0,
+      followedPage: Boolean(listing.providerPage?.followers?.length),
       photos: photos.map((p) => ({
         id: p.id,
         mediaId: p.mediaId ?? null,
@@ -528,5 +687,47 @@ export class ListingsService {
       createdAt: listing.createdAt,
       updatedAt: listing.updatedAt,
     };
+  }
+
+  private async getProviderRankingSignals(providerIds: string[]) {
+    const signals = new Map<string, {
+      trustScore: number;
+      activeDays: number;
+      recommendationCount: number;
+      recommendationScore: number;
+    }>();
+    if (providerIds.length === 0) return signals;
+
+    const cutoff = new Date();
+    cutoff.setUTCDate(cutoff.getUTCDate() - 29);
+    cutoff.setUTCHours(0, 0, 0, 0);
+    const [providers, activityDays] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { id: { in: providerIds } },
+        select: {
+          id: true,
+          trustScore: true,
+          _count: { select: { recommendationsReceived: true } },
+        },
+      }),
+      this.prisma.providerActivityDay.groupBy({
+        by: ['providerId'],
+        where: { providerId: { in: providerIds }, activeDate: { gte: cutoff } },
+        _count: { _all: true },
+      }),
+    ]);
+    const activityByProvider = new Map(activityDays.map((row) => [row.providerId, row._count._all]));
+    for (const provider of providers) {
+      const trustScore = Number(provider.trustScore ?? 50);
+      const activeDays = activityByProvider.get(provider.id) ?? 0;
+      const recommendationCount = provider._count.recommendationsReceived;
+      const recommendationScore = computeProviderRecommendationScore({
+        trustScore,
+        activeDays,
+        recommendationCount,
+      });
+      signals.set(provider.id, { trustScore, activeDays, recommendationCount, recommendationScore });
+    }
+    return signals;
   }
 }

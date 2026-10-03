@@ -15,9 +15,9 @@ function events(ev: Partial<TrustEvent>): TrustEvent {
 }
 
 describe('computeTrustScore', () => {
-  it('returns neutral score for no events', () => {
+  it('does not assign a score before an accommodation is secured', () => {
     const result = computeTrustScore([], now);
-    expect(result.score).toBe(50);
+    expect(result.score).toBeNull();
     expect(result.flaggedForReview).toBe(false);
   });
 
@@ -35,7 +35,7 @@ describe('computeTrustScore', () => {
       events({ type: 'FRAUD_REPORT_CONFIRMED', weight: -60, occurredAt: now }),
     ];
     const result = computeTrustScore(es, now);
-    expect(result.score).toBeLessThan(40);
+    expect(result.score).toBeNull();
     expect(result.flaggedForReview).toBe(true);
   });
 
@@ -48,8 +48,8 @@ describe('computeTrustScore', () => {
       [events({ type: 'DISPUTE_RESOLVED_FOR', weight: 15, occurredAt: now })],
       now,
     );
-    expect(against.score).toBeLessThan(50);
-    expect(forEv.score).toBeGreaterThan(50);
+    expect(against.score).toBeNull();
+    expect(forEv.score).toBeNull();
   });
 
   it('applies recency decay — old events count less', () => {
@@ -67,7 +67,8 @@ describe('computeTrustScore', () => {
       ],
       now,
     );
-    expect(recent.score).toBeGreaterThan(oldScore.score);
+    expect(recent.score).not.toBeNull();
+    expect(recent.score ?? 0).toBeGreaterThan(oldScore.score ?? 0);
   });
 
   it('weights reviews by reviewer trust factor (sybil resistance)', () => {
@@ -79,7 +80,8 @@ describe('computeTrustScore', () => {
       [events({ type: 'REVIEW_RECEIVED', weight: 10, occurredAt: now, reviewerTrustFactor: 0.1 })],
       now,
     );
-    expect(trusted.score).toBeGreaterThan(sybil.score);
+    expect(trusted.score).toBeNull();
+    expect(sybil.score).toBeNull();
   });
 
   it('flags for review on high variance (inconsistent ratings)', () => {
@@ -125,7 +127,15 @@ describe('computeTrustScore', () => {
       events({ type: 'IDENTITY_VERIFIED', weight: 15, occurredAt: now }),
     ];
     const result = computeTrustScore(es, now);
-    expect(result.breakdown.IDENTITY_VERIFIED).toBeGreaterThan(0);
+    expect(result.breakdown.IDENTITY_VERIFIED).toBeUndefined();
+  });
+
+  it('adds trust only after an accommodation is secured for the provider', () => {
+    const booking = computeTrustScore(
+      [events({ type: 'BOOKING_SECURED', weight: 20, occurredAt: now })],
+      now,
+    );
+    expect(booking.score).toBe(10);
   });
 
   it('clamps score to 0-100 range', () => {

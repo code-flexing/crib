@@ -5,10 +5,14 @@ import {
   IsLongitude,
   IsNumber,
   IsOptional,
+  IsArray,
+  ArrayMaxSize,
+  ArrayUnique,
+  IsUUID,
   IsString,
   MaxLength,
-  Min,
   MinLength,
+  Min,
 } from 'class-validator';
 
 export class CreateListingDto {
@@ -168,6 +172,34 @@ export class AttachListingMediaDto {
   mediaId: string;
 }
 
+export class CreateListingCommentDto {
+  @ApiPropertyOptional({ example: 'Is the room still available for the next semester?' })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(1000)
+  body?: string;
+
+  @ApiPropertyOptional({ example: 'https://media.tenor.com/example.gif' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  gifUrl?: string;
+
+  @ApiPropertyOptional({ example: 'comment-uuid', description: 'Parent comment ID for a reply' })
+  @IsOptional()
+  @IsUUID()
+  parentId?: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Tagged public user IDs' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  mentionUserIds?: string[];
+}
+
 export interface ListingResponse {
   id: string;
   title: string;
@@ -183,6 +215,14 @@ export interface ListingResponse {
   status: string;
   availabilityStatus: 'AVAILABLE' | 'SECURED';
   ownerId: string;
+  likeCount: number;
+  likedByCurrentUser: boolean;
+  providerTrustScore: number;
+  providerActiveDays: number;
+  providerRecommendationCount: number;
+  recommendationScore: number;
+  viewCount: number;
+  followedPage: boolean;
   photos: ListingPhotoDto[];
   video: { mediaId: string; durationSec: number | null } | null;
   createdAt: Date;

@@ -23,7 +23,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../../common/roles.decorator.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { ListingsService } from './listings.service.js';
-import { CreateListingDto } from './dto/listing.dto.js';
+import { CreateListingCommentDto, CreateListingDto } from './dto/listing.dto.js';
 import { UpdateListingDto } from './dto/listing.dto.js';
 import { SearchListingsDto } from './dto/listing.dto.js';
 import { AttachListingMediaDto } from './dto/listing.dto.js';
@@ -39,8 +39,8 @@ export class ListingsController {
   @ApiOperation({ summary: 'Search listings' })
   @ApiResponse({ status: 200, type: [Object] })
   @ApiResponse({ status: 401, description: 'Not authenticated' })
-  searchListings(@Query() query: SearchListingsDto) {
-    return this.listingsService.searchListings(query);
+  searchListings(@Query() query: SearchListingsDto, @CurrentUser() user: { id: string }) {
+    return this.listingsService.searchListings(query, user.id);
   }
 
   @Get('admin/pending-review')
@@ -64,14 +64,46 @@ export class ListingsController {
     return this.listingsService.getBookmarks(user.id);
   }
 
+  @Get(':id/comments')
+  @Roles('STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
+  @ApiOperation({ summary: 'List comments on a verified home' })
+  getComments(@Param('id') id: string) {
+    return this.listingsService.getListingComments(id);
+  }
+
+  @Post(':id/comments')
+  @Roles('STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
+  @ApiOperation({ summary: 'Comment on a verified home' })
+  addComment(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+    @Body() dto: CreateListingCommentDto,
+  ) {
+    return this.listingsService.addListingComment(id, user.id, dto);
+  }
+
+  @Post(':id/like')
+  @Roles('STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
+  @ApiOperation({ summary: 'Like a verified home' })
+  like(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.listingsService.likeListing(id, user.id);
+  }
+
+  @Delete(':id/like')
+  @Roles('STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
+  @ApiOperation({ summary: 'Remove a like from a home' })
+  unlike(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.listingsService.unlikeListing(id, user.id);
+  }
+
   @Get(':id')
   @Roles('STUDENT', 'AGENT', 'LANDLORD', 'ADMIN')
   @ApiOperation({ summary: 'Get a listing by ID' })
   @ApiResponse({ status: 200, type: Object })
   @ApiResponse({ status: 404, description: 'Listing not found' })
   @ApiResponse({ status: 401, description: 'Not authenticated' })
-  getListings(@Param('id') id: string) {
-    return this.listingsService.getListing(id);
+  getListings(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.listingsService.getListing(id, user.id);
   }
 
   @Post(':id/bookmark')

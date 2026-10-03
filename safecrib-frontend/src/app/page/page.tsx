@@ -14,7 +14,7 @@ import { ApiError, apiFetch, displayName, getCurrentUser, normalizeAccountStatus
 type ProviderPageData = { id?: string; displayName?: string; status?: string; verificationNotes?: string; rejectionReason?: string; reason?: string } | null;
 type ListingPhoto = string | { url?: string; mediaId?: string };
 type Listing = { id: string; title?: string; description?: string; status?: string; price?: number; discountAmount?: number; discountedPrice?: number; address?: string; campus?: string; photos?: ListingPhoto[]; video?: { mediaId?: string } | null; updatedAt?: string; createdAt?: string };
-type User = { role?: string; displayName?: unknown; email?: string };
+type User = { role?: string; displayName?: unknown; email?: string; verificationStage?: unknown };
 
 function statusLabel(status?: string) {
   return (status || "UNKNOWN").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -50,11 +50,16 @@ export default function ProviderWorkspacePage() {
       setUser(currentUser);
       setProviderPage(page);
       const role = String(currentUser.role ?? "").toUpperCase();
+      const currentStage = normalizeVerificationStage(currentUser.verificationStage);
+      if (currentStage) setVerification(currentStage);
       if (["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)) {
         void apiFetch<unknown>("/api/v1/trust/me/verification-stage")
-          .then((response) => setVerification(normalizeVerificationStage(response)))
-          .catch((verificationError: unknown) => {
-            setError(verificationError instanceof Error ? verificationError.message : "We could not load your verification badge.");
+          .then((response) => {
+            const stage = normalizeVerificationStage(response);
+            if (stage) setVerification(stage);
+          })
+          .catch(() => {
+            if (!currentStage) setError("We could not load your verification badge.");
           });
       }
       let currentStudentStatus: AccountStatus = "not_submitted";

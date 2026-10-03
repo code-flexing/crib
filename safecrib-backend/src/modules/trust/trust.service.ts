@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import { EMAIL_QUEUE } from '../../infra/queue/queue.constants.js';
@@ -12,7 +12,7 @@ export type VerificationBadge = 'GREEN_CHECK' | 'BLUE_SHIELD' | 'GOLD_CROWN';
 export type VerificationBadgeColor = 'green' | 'blue' | 'gold';
 
 export interface VerificationStageCriterion {
-  key: 'identity' | 'provider' | 'student' | 'trust';
+  key: 'identity' | 'provider' | 'student' | 'followers' | 'trust';
   label: string;
   met: boolean;
   required: boolean;
@@ -37,9 +37,30 @@ export interface ComputeUserVerificationStageInput {
   trustScore?: number | null;
   providerPageVerified?: boolean;
   studentProfileApproved?: boolean;
+  followerCount?: number;
   confirmedFraudCount?: number;
   recentFraudCount?: number;
   flaggedForReview?: boolean;
+}
+
+export interface ProviderDiscoveryStats {
+  providerId: string;
+  trustScore: number;
+  activeDays: number;
+  recommendationCount: number;
+  followerCount: number;
+  recommendationScore: number;
+}
+
+export function computeProviderRecommendationScore(input: {
+  trustScore: number;
+  activeDays: number;
+  recommendationCount: number;
+}): number {
+  const trust = Math.max(0, Math.min(100, input.trustScore));
+  const activity = Math.max(0, Math.min(30, input.activeDays)) / 30 * 100;
+  const recommendations = Math.min(100, Math.log1p(Math.max(0, input.recommendationCount)) / Math.log1p(50) * 100);
+  return Math.round(trust * 0.45 + activity * 0.25 + recommendations * 0.3);
 }
 
 export function computeUserVerificationStage(
@@ -55,12 +76,23 @@ export function computeUserVerificationStage(
   const providerMet = ['AGENT', 'LANDLORD'].includes(role ?? '') && input.providerPageVerified === true;
   const studentMet = role === 'STUDENT' && input.studentProfileApproved === true;
   const trustMet = (input.trustScore ?? 0) >= 85;
+  const followersMet = (input.followerCount ?? 0) >= 10;
 
+  const isProvider = ['AGENT', 'LANDLORD'].includes(role ?? '');
   const criteria: VerificationStageCriterion[] = [
     { key: 'identity', label: 'Identity verified', met: identityMet, required: true },
-    { key: 'provider', label: 'Provider verification', met: providerMet, required: false },
-    { key: 'student', label: 'Student verification', met: studentMet, required: false },
-    { key: 'trust', label: 'Trust score threshold', met: trustMet, required: false },
+    ...(isProvider
+      ? [
+          { key: 'provider' as const, label: 'Provider verification', met: providerMet, required: true },
+          { key: 'followers' as const, label: '10 followers', met: followersMet, required: true },
+          { key: 'trust' as const, label: 'Trust score threshold', met: trustMet, required: false },
+        ]
+      : role === 'STUDENT'
+        ? [
+            { key: 'student' as const, label: 'Student verification', met: studentMet, required: true },
+            { key: 'followers' as const, label: '10 followers', met: followersMet, required: true },
+          ]
+        : []),
   ];
 
   let stage: VerificationStageName = 'PROFILE_VERIFIED';
@@ -78,12 +110,12 @@ export function computeUserVerificationStage(
     badge = 'GREEN_CHECK';
     badgeColor = 'green';
     nextMilestone = 'Complete identity verification';
-  } else if (providerMet && trustMet) {
+  } else if (providerMet && followersMet && trustMet) {
     stage = 'TRUST_CROWN';
     badge = 'GOLD_CROWN';
     badgeColor = 'gold';
     nextMilestone = null;
-  } else if (providerMet) {
+  } else if (providerMet && followersMet) {
     stage = 'AGENT_VERIFIED';
     badge = 'BLUE_SHIELD';
     badgeColor = 'blue';
@@ -93,7 +125,13 @@ export function computeUserVerificationStage(
     badge = 'GREEN_CHECK';
     badgeColor = 'green';
     if (['AGENT', 'LANDLORD'].includes(role ?? '')) {
-      nextMilestone = 'Submit and verify your provider profile';
+      nextMilestone = !providerMet
+        ? 'Submit and verify your provider profile'
+        : 'Reach 10 followers to unlock your provider badge';
+    } else if (role === 'STUDENT' && !studentMet) {
+      nextMilestone = 'Complete student verification';
+    } else if (role === 'STUDENT' && !followersMet) {
+      nextMilestone = 'Reach 10 followers to complete your verification';
     } else {
       nextMilestone = 'Complete profile verification to unlock recognition';
     }
@@ -155,6 +193,7 @@ export class TrustService {
             nextMilestone: true,
           },
         },
+        _count: { select: { followers: true } },
       },
     });
 
@@ -180,39 +219,48 @@ export class TrustService {
       trustScore: user.trustScore ?? trustScore.score ?? 0,
       providerPageVerified: user.providerPage?.verificationState === 'VERIFIED',
       studentProfileApproved: user.studentProfile?.status === 'APPROVED',
+      followerCount: user._count.followers,
       confirmedFraudCount,
       recentFraudCount,
       flaggedForReview: trustScore.flaggedForReview,
     });
 
     const persistedTrustScore = Math.round(user.trustScore ?? trustScore.score ?? 0);
-    await this.prisma.userVerification.upsert({
-      where: { userId },
-      update: {
-        stage: computed.stage,
-        badge: computed.badge,
-        badgeColor: computed.badgeColor,
-        riskBlocked: computed.riskBlocked,
-        identityVerified: computed.criteria.some((criterion) => criterion.key === 'identity' && criterion.met),
-        providerVerified: computed.criteria.some((criterion) => criterion.key === 'provider' && criterion.met),
-        studentProfileApproved: computed.criteria.some((criterion) => criterion.key === 'student' && criterion.met),
-        trustScore: computed.stage === 'TRUST_CROWN' ? Math.max(85, persistedTrustScore) : persistedTrustScore,
-        nextMilestone: computed.nextMilestone,
-        lastComputedAt: new Date(),
-      },
-      create: {
-        userId,
-        stage: computed.stage,
-        badge: computed.badge,
-        badgeColor: computed.badgeColor,
-        riskBlocked: computed.riskBlocked,
-        identityVerified: computed.criteria.some((criterion) => criterion.key === 'identity' && criterion.met),
-        providerVerified: computed.criteria.some((criterion) => criterion.key === 'provider' && criterion.met),
-        studentProfileApproved: computed.criteria.some((criterion) => criterion.key === 'student' && criterion.met),
-        trustScore: persistedTrustScore,
-        nextMilestone: computed.nextMilestone,
-      },
-    });
+    try {
+      await this.prisma.userVerification.upsert({
+        where: { userId },
+        update: {
+          stage: computed.stage,
+          badge: computed.badge,
+          badgeColor: computed.badgeColor,
+          riskBlocked: computed.riskBlocked,
+          identityVerified: computed.criteria.some((criterion) => criterion.key === 'identity' && criterion.met),
+          providerVerified: computed.criteria.some((criterion) => criterion.key === 'provider' && criterion.met),
+          studentProfileApproved: computed.criteria.some((criterion) => criterion.key === 'student' && criterion.met),
+          trustScore: computed.stage === 'TRUST_CROWN' ? Math.max(85, persistedTrustScore) : persistedTrustScore,
+          nextMilestone: computed.nextMilestone,
+          lastComputedAt: new Date(),
+        },
+        create: {
+          userId,
+          stage: computed.stage,
+          badge: computed.badge,
+          badgeColor: computed.badgeColor,
+          riskBlocked: computed.riskBlocked,
+          identityVerified: computed.criteria.some((criterion) => criterion.key === 'identity' && criterion.met),
+          providerVerified: computed.criteria.some((criterion) => criterion.key === 'provider' && criterion.met),
+          studentProfileApproved: computed.criteria.some((criterion) => criterion.key === 'student' && criterion.met),
+          trustScore: persistedTrustScore,
+          nextMilestone: computed.nextMilestone,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Unable to persist verification stage for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      return { ...computed, generatedAt: new Date() };
+    }
 
     this.enqueueBadgeAwardIfNew(user, computed, Number(user.trustScore ?? trustScore.score ?? 0));
 
@@ -265,6 +313,7 @@ export class TrustService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
+        role: true,
         trustScore: true,
         trustScoreUpdatedAt: true,
         _count: { select: { trustEvents: true } },
@@ -273,6 +322,10 @@ export class TrustService {
 
     if (!user) {
       throw new NotFoundException('User not found');
+    }
+
+    if (!['AGENT', 'LANDLORD'].includes(user.role)) {
+      return this.recomputeScore(userId);
     }
 
     if (user.trustScore === null || user.trustScoreUpdatedAt === null) {
@@ -290,6 +343,26 @@ export class TrustService {
   }
 
   async recomputeScore(userId: string): Promise<TrustScoreResult> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (!['AGENT', 'LANDLORD'].includes(user.role)) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { trustScore: null, trustScoreUpdatedAt: null },
+      });
+      return {
+        score: null,
+        breakdown: {},
+        flaggedForReview: false,
+        lastUpdated: null,
+        eventCount: 0,
+      };
+    }
+
     const events = await this.prisma.trustEvent.findMany({
       where: { userId },
       orderBy: { occurredAt: 'desc' },
@@ -338,11 +411,20 @@ export class TrustService {
   }
 
   async getTrustScoreBreakdown(userId: string): Promise<{
-    score: number;
+    score: number | null;
     breakdown: Record<string, number>;
     flaggedForReview: boolean;
     events: Array<{ type: string; weight: number; occurredAt: Date }>;
   }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (!['AGENT', 'LANDLORD'].includes(user.role)) {
+      return { score: null, breakdown: {}, flaggedForReview: false, events: [] };
+    }
+
     const events = await this.prisma.trustEvent.findMany({
       where: { userId },
       orderBy: { occurredAt: 'desc' },
@@ -366,6 +448,87 @@ export class TrustService {
         weight: e.weight,
         occurredAt: e.occurredAt,
       })),
+    };
+  }
+
+  async recordProviderActivity(userId: string): Promise<{ recorded: boolean }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.role !== 'AGENT' && user.role !== 'LANDLORD') {
+      throw new ForbiddenException('Only providers have activity-day tracking');
+    }
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    await this.prisma.providerActivityDay.upsert({
+      where: { providerId_activeDate: { providerId: userId, activeDate: today } },
+      create: { providerId: userId, activeDate: today },
+      update: {},
+    });
+    return { recorded: true };
+  }
+
+  async recommendProvider(recommenderId: string, providerId: string): Promise<{ recommended: boolean }> {
+    if (recommenderId === providerId) throw new ForbiddenException('You cannot recommend yourself');
+    const [recommender, provider] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: recommenderId }, select: { role: true } }),
+      this.prisma.user.findUnique({ where: { id: providerId }, select: { role: true } }),
+    ]);
+    if (!recommender || recommender.role !== 'STUDENT') {
+      throw new ForbiddenException('Only students can recommend providers');
+    }
+    if (!provider || (provider.role !== 'AGENT' && provider.role !== 'LANDLORD')) {
+      throw new NotFoundException('Provider not found');
+    }
+
+    await this.prisma.providerRecommendation.upsert({
+      where: { recommenderId_providerId: { recommenderId, providerId } },
+      create: { recommenderId, providerId },
+      update: {},
+    });
+    return { recommended: true };
+  }
+
+  async removeProviderRecommendation(recommenderId: string, providerId: string): Promise<{ recommended: boolean }> {
+    await this.prisma.providerRecommendation.deleteMany({ where: { recommenderId, providerId } });
+    return { recommended: false };
+  }
+
+  async getMyRecommendations(recommenderId: string): Promise<string[]> {
+    const records = await this.prisma.providerRecommendation.findMany({
+      where: { recommenderId },
+      select: { providerId: true },
+    });
+    return records.map((record) => record.providerId);
+  }
+
+  async getProviderDiscoveryStats(providerId: string): Promise<ProviderDiscoveryStats> {
+    const provider = await this.prisma.user.findUnique({
+      where: { id: providerId },
+      select: { id: true, role: true, trustScore: true, _count: { select: { followers: true } } },
+    });
+    if (!provider || (provider.role !== 'AGENT' && provider.role !== 'LANDLORD')) {
+      throw new NotFoundException('Provider not found');
+    }
+
+    const cutoff = new Date();
+    cutoff.setUTCDate(cutoff.getUTCDate() - 29);
+    cutoff.setUTCHours(0, 0, 0, 0);
+    const [activeDays, recommendationCount] = await Promise.all([
+      this.prisma.providerActivityDay.count({ where: { providerId, activeDate: { gte: cutoff } } }),
+      this.prisma.providerRecommendation.count({ where: { providerId } }),
+    ]);
+    const trustScore = Number(provider.trustScore ?? 0);
+    return {
+      providerId,
+      trustScore,
+      activeDays,
+      recommendationCount,
+      followerCount: provider._count.followers,
+      recommendationScore: computeProviderRecommendationScore({ trustScore, activeDays, recommendationCount }),
     };
   }
 }

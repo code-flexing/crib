@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -38,6 +39,7 @@ export class UserService {
             status: true,
           },
         },
+        _count: { select: { followers: true } },
       },
     });
 
@@ -45,7 +47,7 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    const { studentProfile, ...rest } = user;
+    const { studentProfile, _count, ...rest } = user;
     const verificationStage = computeUserVerificationStage({
       userId: user.id,
       role: user.role,
@@ -53,6 +55,7 @@ export class UserService {
       trustScore: user.trustScore ?? 0,
       providerPageVerified: user.providerPage?.verificationState === 'VERIFIED',
       studentProfileApproved: studentProfile?.status === 'APPROVED',
+      followerCount: _count.followers,
       confirmedFraudCount: 0,
       recentFraudCount: 0,
       flaggedForReview: false,
@@ -61,6 +64,7 @@ export class UserService {
     return {
       ...rest,
       studentProfileStatus: studentProfile?.status ?? 'NOT_SUBMITTED',
+      followerCount: _count.followers,
       verificationStage,
     };
   }
@@ -99,7 +103,7 @@ export class UserService {
     });
   }
 
-  async getPublicProfile(userId: string) {
+  async getPublicProfile(userId: string, viewerId?: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -112,14 +116,27 @@ export class UserService {
         studentProfile: {
           select: { status: true, profilePicture: true },
         },
+        _count: { select: { followers: true, recommendationsReceived: true } },
+        followers: viewerId ? {
+          where: { followerId: viewerId },
+          select: { followerId: true },
+          take: 1,
+        } : false,
         providerPage: {
           select: {
+            id: true,
             displayName: true,
             description: true,
             providerType: true,
             businessName: true,
             profilePicture: true,
             verificationState: true,
+            _count: { select: { followers: true } },
+            followers: viewerId ? {
+              where: { followerId: viewerId },
+              select: { followerId: true },
+              take: 1,
+            } : false,
             verifiedAt: true,
             socialLinks: true,
             listings: {
@@ -135,6 +152,7 @@ export class UserService {
                 address: true,
                 createdAt: true,
                 photos: { select: { id: true, url: true } },
+                _count: { select: { likes: true, views: true } },
               },
             },
           },
@@ -159,6 +177,17 @@ export class UserService {
       role: user.role,
       createdAt: user.createdAt,
       identityVerified: user.identityVerified,
+      followerCount: user._count.followers,
+      isFollowingUser: Boolean(user.followers?.length),
+      providerPageId: providerPage?.id ?? null,
+      isFollowingPage: Boolean(providerPage?.followers?.length),
+      providerPageFollowerCount: providerPage?._count.followers ?? 0,
+      publicEngagement: providerPage
+        ? {
+            recommendationCount: user._count.recommendationsReceived,
+            likeCount: providerPage.listings.reduce((sum, listing) => sum + listing._count.likes, 0),
+          }
+        : null,
       profilePicture:
         user.profilePicture ??
         providerPage?.profilePicture ??
@@ -173,7 +202,137 @@ export class UserService {
             socialLinks: providerPage.socialLinks,
           }
         : null,
-      listings: providerPage?.listings ?? [],
+      listings: providerPage?.listings.map(({ _count, ...listing }) => ({
+        ...listing,
+        likeCount: _count.likes,
+        viewCount: _count.views,
+      })) ?? [],
+    };
+  }
+
+  async discoverPeople(query: string, currentUserId: string) {
+    const search = query.trim().slice(0, 80);
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { not: currentUserId },
+        OR: [
+          { role: 'STUDENT', studentProfile: { status: 'APPROVED' } },
+          { role: { in: ['AGENT', 'LANDLORD'] }, providerPage: { verificationState: 'VERIFIED' } },
+        ],
+        ...(search ? {
+          AND: [{
+            OR: [
+              { displayName: { contains: search, mode: 'insensitive' } },
+              { studentProfile: { schoolOfStudy: { contains: search, mode: 'insensitive' } } },
+              { providerPage: { displayName: { contains: search, mode: 'insensitive' } } },
+            ],
+          }],
+        } : {}),
+      },
+      take: 40,
+      orderBy: { displayName: 'asc' },
+      select: {
+        id: true,
+        displayName: true,
+        profilePicture: true,
+        role: true,
+        studentProfile: { select: { schoolOfStudy: true } },
+        _count: { select: { followers: true } },
+        followers: { where: { followerId: currentUserId }, select: { followerId: true }, take: 1 },
+      },
+    });
+    const pages = await this.prisma.providerPage.findMany({
+      where: {
+        verificationState: 'VERIFIED',
+        ownerId: { not: currentUserId },
+        ...(search ? { displayName: { contains: search, mode: 'insensitive' } } : {}),
+      },
+      take: 40,
+      orderBy: { displayName: 'asc' },
+      select: {
+        id: true,
+        ownerId: true,
+        displayName: true,
+        profilePicture: true,
+        providerType: true,
+        _count: { select: { followers: true } },
+        followers: { where: { followerId: currentUserId }, select: { followerId: true }, take: 1 },
+      },
+    });
+    return {
+      users: users.map(({ _count, followers, studentProfile, ...user }) => ({
+        ...user,
+        school: studentProfile?.schoolOfStudy ?? null,
+        followerCount: _count.followers,
+        isFollowing: followers.length > 0,
+      })),
+      pages: pages.map(({ _count, followers, ...page }) => ({
+        ...page,
+        followerCount: _count.followers,
+        isFollowing: followers.length > 0,
+      })),
+    };
+  }
+
+  async followUser(followerId: string, followedId: string) {
+    if (followerId === followedId) throw new BadRequestException('You cannot follow yourself');
+    const target = await this.prisma.user.findUnique({
+      where: { id: followedId },
+      select: { id: true, role: true, studentProfile: { select: { status: true } }, providerPage: { select: { verificationState: true } } },
+    });
+    if (!target || !(target.role === 'STUDENT' && target.studentProfile?.status === 'APPROVED') &&
+      !(['AGENT', 'LANDLORD'].includes(target.role) && target.providerPage?.verificationState === 'VERIFIED')) {
+      throw new NotFoundException('User profile unavailable');
+    }
+    await this.prisma.userFollow.upsert({
+      where: { followerId_followedId: { followerId, followedId } },
+      create: { followerId, followedId },
+      update: {},
+    });
+    return { following: true };
+  }
+
+  async unfollowUser(followerId: string, followedId: string) {
+    await this.prisma.userFollow.deleteMany({ where: { followerId, followedId } });
+    return { following: false };
+  }
+
+  async followPage(followerId: string, pageId: string) {
+    const page = await this.prisma.providerPage.findUnique({
+      where: { id: pageId },
+      select: { id: true, ownerId: true, verificationState: true },
+    });
+    if (!page || page.verificationState !== 'VERIFIED') throw new NotFoundException('Provider page unavailable');
+    if (page.ownerId === followerId) throw new BadRequestException('You cannot follow your own page');
+    await this.prisma.pageFollow.upsert({
+      where: { followerId_pageId: { followerId, pageId } },
+      create: { followerId, pageId },
+      update: {},
+    });
+    return { following: true };
+  }
+
+  async unfollowPage(followerId: string, pageId: string) {
+    await this.prisma.pageFollow.deleteMany({ where: { followerId, pageId } });
+    return { following: false };
+  }
+
+  async getStudentEngagementStats(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!user || user.role !== 'STUDENT') throw new ForbiddenException('Student activity is private');
+    const [likes, comments, recommendations, userFollows, pageFollows] = await Promise.all([
+      this.prisma.listingLike.count({ where: { userId } }),
+      this.prisma.listingComment.count({ where: { userId } }),
+      this.prisma.providerRecommendation.count({ where: { recommenderId: userId } }),
+      this.prisma.userFollow.count({ where: { followerId: userId } }),
+      this.prisma.pageFollow.count({ where: { followerId: userId } }),
+    ]);
+    return {
+      likes,
+      comments,
+      recommendations,
+      follows: userFollows + pageFollows,
+      totalInteractions: likes + comments + recommendations,
     };
   }
 

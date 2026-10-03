@@ -440,18 +440,29 @@ export class AdminService {
   }
 
   private async findStudentProfile(entityId: string | null, email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
     if (entityId) {
-      return this.prisma.studentProfile.findUnique({ where: { id: entityId } });
+      const profile = await this.prisma.studentProfile.findFirst({
+        where: { id: entityId, user: { email: normalizedEmail } },
+      });
+      if (profile) return profile;
     }
-    return this.prisma.studentProfile.findFirst({ where: { user: { email } } });
+    return this.prisma.studentProfile.findFirst({
+      where: { user: { email: normalizedEmail } },
+      orderBy: { submittedAt: 'desc' },
+    });
   }
 
   private async findProviderPage(entityId: string | null, email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
     if (entityId) {
-      return this.prisma.providerPage.findUnique({ where: { id: entityId } });
+      const page = await this.prisma.providerPage.findFirst({
+        where: { id: entityId, owner: { email: normalizedEmail } },
+      });
+      if (page) return page;
     }
     return this.prisma.providerPage.findFirst({
-      where: { owner: { email } },
+      where: { owner: { email: normalizedEmail } },
       orderBy: { submittedAt: 'desc' },
     });
   }

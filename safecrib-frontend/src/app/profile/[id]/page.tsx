@@ -8,7 +8,7 @@ import { PageLoader } from "@/components/loading/PageLoader";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { cachedApiFetch, clearSession, getCachedCurrentUser, isUnauthorizedError, resolveMediaUrl, unwrapData } from "@/lib/api";
+import { apiFetch, cachedApiFetch, clearSession, getCachedCurrentUser, isUnauthorizedError, resolveMediaUrl, unwrapData } from "@/lib/api";
 
 type Listing = {
   id: string;
@@ -18,6 +18,9 @@ type Listing = {
   discountAmount?: number;
   campus?: string;
   address?: string;
+  likeCount?: number;
+  viewCount?: number;
+  providerRecommendationCount?: number;
   photos?: Array<{ url?: string }>;
 };
 
@@ -28,6 +31,12 @@ type PublicProfile = {
   role?: string;
   createdAt?: string;
   identityVerified?: boolean;
+  followerCount?: number;
+  isFollowingUser?: boolean;
+  providerPageId?: string | null;
+  isFollowingPage?: boolean;
+  providerPageFollowerCount?: number;
+  publicEngagement?: { likeCount: number; recommendationCount: number } | null;
   provider?: {
     displayName?: string;
     description?: string;
@@ -59,6 +68,7 @@ function PublicListings({ listings }: { listings: Listing[] }) {
         <p className="mt-2 line-clamp-2 text-sm leading-5 text-black/55">{listing.description || "View this home for details."}</p>
         <p className="mt-3 font-semibold text-safecrib-black">{typeof listing.price === "number" ? `₦${(listing.price - (listing.discountAmount ?? 0)).toLocaleString()}` : "Price on request"}</p>
         <p className="mt-1 text-xs text-black/45">{listing.address || listing.campus || ""}</p>
+        <div className="mt-3 flex gap-4 text-xs text-black/50"><span>{listing.viewCount ?? 0} views</span><span>{listing.likeCount ?? 0} likes</span></div>
       </div>
     </article>)}
   </div>;
@@ -74,6 +84,8 @@ export default function PublicProfilePage() {
   const [verificationError, setVerificationError] = useState("");
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
+  const [followPending, setFollowPending] = useState(false);
+  const [followError, setFollowError] = useState("");
 
   useEffect(() => {
     if (!localStorage.getItem("safecrib_access_token")) {
@@ -86,23 +98,22 @@ export default function PublicProfilePage() {
     }
 
     let active = true;
-    void cachedApiFetch<unknown>(`/api/v1/users/${encodeURIComponent(profileId)}/public-profile`)
-      .then((response) => unwrapData<PublicProfile>(response))
-      .then(async (publicProfile) => {
+    const publicProfileRequest = cachedApiFetch<unknown>(`/api/v1/users/${encodeURIComponent(profileId)}/public-profile`)
+      .then((response) => unwrapData<PublicProfile>(response));
+    const verificationRequest = cachedApiFetch<unknown>(`/api/v1/trust/users/${encodeURIComponent(profileId)}/verification-stage`)
+      .then(normalizeVerificationStage)
+      .catch((verificationLoadError: unknown) => {
+        if (active) setVerificationError(verificationLoadError instanceof Error ? verificationLoadError.message : "Verification badge could not be loaded.");
+        return null;
+      });
+    void Promise.all([publicProfileRequest, verificationRequest])
+      .then(async ([publicProfile, verificationStage]) => {
         if (!active) return;
         setProfile(publicProfile);
-        const [pictureUrl, verificationStage] = await Promise.all([
-          resolveMediaUrl(publicProfile.profilePicture),
-          cachedApiFetch<unknown>(`/api/v1/trust/users/${encodeURIComponent(publicProfile.id)}/verification-stage`)
-            .then(normalizeVerificationStage)
-            .catch((verificationLoadError: unknown) => {
-              if (active) setVerificationError(verificationLoadError instanceof Error ? verificationLoadError.message : "Verification badge could not be loaded.");
-              return null;
-            }),
-        ]);
+        setVerification(verificationStage);
+        const pictureUrl = await resolveMediaUrl(publicProfile.profilePicture);
         if (!active) return;
         setAvatarUrl(pictureUrl);
-        setVerification(verificationStage);
       })
       .catch((loadError: unknown) => {
         if (isUnauthorizedError(loadError)) {
@@ -117,6 +128,31 @@ export default function PublicProfilePage() {
       });
     return () => { active = false; };
   }, [profileId, router]);
+
+  const toggleFollow = async (target: "user" | "page") => {
+    if (!profile) return;
+    const following = target === "user" ? profile.isFollowingUser === true : profile.isFollowingPage === true;
+    const id = target === "user" ? profile.id : profile.providerPageId;
+    if (!id) return;
+    setFollowPending(true);
+    setFollowError("");
+    try {
+      const path = target === "user"
+        ? `/api/v1/users/${encodeURIComponent(id)}/follow`
+        : `/api/v1/users/pages/${encodeURIComponent(id)}/follow`;
+      await apiFetch(path, { method: following ? "DELETE" : "POST" });
+      setProfile((current) => current ? {
+        ...current,
+        ...(target === "user"
+          ? { isFollowingUser: !following, followerCount: Math.max(0, (current.followerCount ?? 0) + (following ? -1 : 1)) }
+          : { isFollowingPage: !following, providerPageFollowerCount: Math.max(0, (current.providerPageFollowerCount ?? 0) + (following ? -1 : 1)) }),
+      } : current);
+    } catch (error) {
+      setFollowError(error instanceof Error ? error.message : "We could not update your follow.");
+    } finally {
+      setFollowPending(false);
+    }
+  };
 
   if (loading) return <PageLoader label="Loading profile" />;
 
@@ -143,12 +179,23 @@ export default function PublicProfilePage() {
                     {verification && <VerificationBadge verification={verification} compact iconOnly />}
                   </div>
                   <p className="mt-2 text-sm text-black/55">{readable(profile.role)}{profile.createdAt ? ` · Member since ${new Date(profile.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "long" })}` : ""}</p>
+                  <p className="mt-1 text-sm text-black/55">{profile.followerCount ?? 0} followers</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={followPending} onClick={() => void toggleFollow("user")} className={`rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50 ${profile.isFollowingUser ? "border border-black/15 text-black/65" : "bg-safecrib-green text-white"}`}>{profile.isFollowingUser ? "Following" : "Follow"}</button>
+                  {profile.providerPageId && <button type="button" disabled={followPending} onClick={() => void toggleFollow("page")} className={`rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50 ${profile.isFollowingPage ? "border border-black/15 text-black/65" : "bg-safecrib-green text-white"}`}>{profile.isFollowingPage ? "Page followed" : "Follow page"} · {profile.providerPageFollowerCount ?? 0}</button>}
                 </div>
                 {profile.identityVerified && <span className="mb-1 inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">Identity verified</span>}
               </div>
             </section>
 
             {verificationError && <p role="status" className="mt-4 text-sm text-amber-800">Verification badge temporarily unavailable.</p>}
+            {followError && <p role="alert" className="mt-4 text-sm text-red-700">{followError}</p>}
+
+            {profile.publicEngagement && <section className="mt-6 grid gap-3 sm:grid-cols-2" aria-label="Public provider engagement">
+              <div className="rounded-xl border border-black/10 bg-white p-4"><p className="text-xs uppercase tracking-wide text-black/45">Home likes</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{profile.publicEngagement.likeCount}</p></div>
+              <div className="rounded-xl border border-black/10 bg-white p-4"><p className="text-xs uppercase tracking-wide text-black/45">Student recommendations</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{profile.publicEngagement.recommendationCount}</p></div>
+            </section>}
 
             {profile.provider && <section className="mt-6 rounded-xl border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="provider-about-heading">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Provider</p>

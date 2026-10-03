@@ -19,6 +19,7 @@ type User = {
   profilePicture?: string;
   createdAt?: string;
   studentProfileStatus?: unknown;
+  followerCount?: number;
   verificationStage?: unknown;
 };
 
@@ -63,7 +64,11 @@ type Listing = {
   address?: string;
   createdAt?: string;
   photos?: Array<string | { url?: string }>;
+  likeCount?: number;
+  viewCount?: number;
 };
+type StudentEngagement = { totalInteractions: number; follows: number; likes: number; comments: number; recommendations: number };
+type ProviderStats = { trustScore: number | null; recommendationCount: number; followerCount: number; activeDays: number };
 
 function readable(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return "";
@@ -100,9 +105,11 @@ function ListingGrid({ listings, own = false }: { listings: Listing[]; own?: boo
             <h3 className="font-medium text-safecrib-black">{listing.title || "Untitled home"}</h3>
             {own && listing.status && <span className="rounded-full bg-black/[0.05] px-2.5 py-1 text-xs font-medium text-black/60">{readable(listing.status)}</span>}
           </div>
+
           <p className="mt-2 line-clamp-2 text-sm leading-5 text-black/55">{listing.description || "View this home for details."}</p>
           <p className="mt-3 font-semibold text-safecrib-black">{typeof (listing.discountedPrice ?? listing.price) === "number" ? `₦${(listing.discountedPrice ?? listing.price)?.toLocaleString()}` : "Price on request"}</p>
           <p className="mt-1 text-xs text-black/45">{listing.address || listing.campus || ""}</p>
+          {listing.status === "VERIFIED" && <p className="mt-2 text-xs text-black/50">{listing.viewCount ?? 0} views · {listing.likeCount ?? 0} likes</p>}
           <Link href={`/dashboard/listings/${encodeURIComponent(listing.id)}`} className="mt-4 inline-flex text-sm font-semibold text-safecrib-green hover:underline">View home <span aria-hidden="true" className="ml-1">→</span></Link>
         </div>
       </article>;
@@ -116,6 +123,8 @@ export default function ProfilePage() {
   const [student, setStudent] = useState<StudentProfile>(null);
   const [provider, setProvider] = useState<ProviderPage>(null);
   const [listings, setListings] = useState<Listing[]>([]);
+  const [studentEngagement, setStudentEngagement] = useState<StudentEngagement | null>(null);
+  const [providerStats, setProviderStats] = useState<ProviderStats | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [verification, setVerification] = useState<VerificationStageResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -130,6 +139,7 @@ export default function ProfilePage() {
     const cachedUser = getCachedCurrentUser<User>();
     if (cachedUser) {
       setUser(cachedUser);
+      setVerification(normalizeVerificationStage(cachedUser.verificationStage));
       setLoading(false);
     }
 
@@ -137,18 +147,20 @@ export default function ProfilePage() {
     void cachedCurrentUser<User>().then(async (currentUser) => {
       if (!active) return;
       setUser(currentUser);
+      const currentStage = normalizeVerificationStage(currentUser.verificationStage);
+      if (currentStage) setVerification(currentStage);
       const role = String(currentUser.role ?? "").toUpperCase();
       const verificationRequest = ["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)
         ? cachedApiFetch<unknown>("/api/v1/trust/me/verification-stage")
             .then(normalizeVerificationStage)
-            .catch((verificationError: unknown) => {
-              if (active) setError(verificationError instanceof Error ? verificationError.message : "We could not load your verification badge.");
-              return null;
-            })
+            .catch(() => null)
         : Promise.resolve(normalizeVerificationStage(currentUser.verificationStage));
+      void verificationRequest.then((stage) => {
+        if (active && stage) setVerification(stage);
+      });
       const isStudent = ["UNVERIFIED", "STUDENT"].includes(role);
       const isProvider = ["AGENT", "LANDLORD"].includes(role);
-      const [studentProfile, providerPage, ownListings, verificationStage] = await Promise.all([
+      const [studentProfile, providerPage, ownListings, studentStats, providerDiscovery] = await Promise.all([
         isStudent
           ? cachedApiFetch<unknown>("/api/v1/student-profiles/me").then(unwrapData<StudentProfile>)
           : Promise.resolve(null),
@@ -158,13 +170,19 @@ export default function ProfilePage() {
         isProvider
           ? cachedApiFetch<unknown>("/api/v1/listings/my").then(unwrapData<Listing[]>)
           : Promise.resolve([]),
-        verificationRequest,
+        role === "STUDENT"
+          ? cachedApiFetch<unknown>("/api/v1/users/me/engagement-stats").then(unwrapData<StudentEngagement>).catch(() => null)
+          : Promise.resolve(null),
+        isProvider && currentUser.id
+          ? cachedApiFetch<unknown>(`/api/v1/trust/users/${encodeURIComponent(currentUser.id)}/discovery-stats`).then(unwrapData<ProviderStats>).catch(() => null)
+          : Promise.resolve(null),
       ]);
       if (!active) return;
-      setVerification(verificationStage);
       setStudent(studentProfile);
       setProvider(providerPage);
       setListings(Array.isArray(ownListings) ? ownListings : []);
+      setStudentEngagement(studentStats);
+      setProviderStats(providerDiscovery);
       const picture = currentUser.profilePicture ?? studentProfile?.profilePicture ?? providerPage?.profilePicture;
       const resolvedPicture = await resolveMediaUrl(picture);
       if (active) setAvatarUrl(resolvedPicture);
@@ -263,6 +281,25 @@ export default function ProfilePage() {
               : <p className="mt-5 rounded-xl border border-dashed border-black/15 bg-[#fafbf9] px-5 py-8 text-center text-sm leading-6 text-black/55">Your activity and posts will appear here when you share them.</p>}
           </section>
         </div>
+
+        {role === "STUDENT" && studentEngagement && <section className="mt-6 rounded-2xl border border-black/[0.08] bg-white p-5 shadow-[0_14px_36px_rgba(11,12,14,0.045)] sm:p-6" aria-label="Private student engagement">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Private to you</p>
+          <h2 className="mt-1 text-xl font-semibold text-safecrib-black">Your engagement</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl bg-[#f7faf8] p-4"><p className="text-xs text-black/50">Total interactions</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{studentEngagement.totalInteractions}</p></div>
+            <div className="rounded-xl bg-[#f7faf8] p-4"><p className="text-xs text-black/50">Total engagement</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{studentEngagement.totalInteractions + studentEngagement.follows}</p></div>
+          </div>
+        </section>}
+
+        {["AGENT", "LANDLORD"].includes(role) && providerStats && <section className="mt-6 rounded-2xl border border-black/[0.08] bg-white p-5 shadow-[0_14px_36px_rgba(11,12,14,0.045)] sm:p-6" aria-label="Public provider engagement">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-safecrib-green">Public activity</p>
+          <h2 className="mt-1 text-xl font-semibold text-safecrib-black">Your provider engagement</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-[#f7faf8] p-4"><p className="text-xs text-black/50">Recommendations</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{providerStats.recommendationCount}</p></div>
+            <div className="rounded-xl bg-[#f7faf8] p-4"><p className="text-xs text-black/50">Home likes</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{listings.reduce((sum, listing) => sum + (listing.likeCount ?? 0), 0)}</p></div>
+            <div className="rounded-xl bg-[#f7faf8] p-4"><p className="text-xs text-black/50">Followers</p><p className="mt-1 text-2xl font-semibold text-safecrib-black">{providerStats.followerCount}</p></div>
+          </div>
+        </section>}
 
         {student && studentStatus !== "approved" && (
           <div className="mt-6 flex flex-col justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-center">

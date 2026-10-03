@@ -48,6 +48,19 @@ function makeService() {
     },
     listingPhoto: { create: vi.fn(), findFirst: vi.fn(), delete: vi.fn() },
     listingVideo: { findUnique: vi.fn(), create: vi.fn(), delete: vi.fn() },
+    listingLike: {
+      upsert: vi.fn(async () => ({})),
+      deleteMany: vi.fn(async () => ({ count: 1 })),
+    },
+    listingComment: {
+      findMany: vi.fn(async () => []),
+      create: vi.fn(async ({ data }: { data: { listingId: string; userId: string; body: string } }) => ({
+        id: 'comment_1',
+        ...data,
+        createdAt: new Date(),
+        user: { id: data.userId, displayName: 'Student' },
+      })),
+    },
     media: { findUnique: vi.fn() },
     $transaction: vi.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
   };
@@ -62,6 +75,34 @@ function makeService() {
 }
 
 describe('ListingsService listing media and pricing rules', () => {
+  it('prevents listing owners from liking their own home', async () => {
+    const { service, prisma } = makeService();
+    prisma.listing.findUnique.mockResolvedValueOnce({ id: 'listing_1', ownerId: 'agent_1', status: 'VERIFIED' });
+
+    await expect(service.likeListing('listing_1', 'agent_1')).rejects.toThrow('You cannot like your own home');
+    expect(prisma.listingLike.upsert).not.toHaveBeenCalled();
+  });
+
+  it('stores a trimmed comment on a verified home', async () => {
+    const { service, prisma } = makeService();
+    prisma.listing.findUnique.mockResolvedValueOnce({ id: 'listing_1', status: 'VERIFIED' });
+
+    const comment = await service.addListingComment('listing_1', 'student_1', { body: '  Is this available?  ' });
+
+    expect(prisma.listingComment.create).toHaveBeenCalledWith({
+      data: {
+        listingId: 'listing_1',
+        userId: 'student_1',
+        body: 'Is this available?',
+        gifUrl: null,
+        parentId: null,
+        mentions: { create: [] },
+      },
+      select: expect.objectContaining({ body: true, gifUrl: true, parentId: true }),
+    });
+    expect(comment.body).toBe('Is this available?');
+  });
+
   it('rejects a discount greater than the listing price', async () => {
     const { service, providerPages } = makeService();
 

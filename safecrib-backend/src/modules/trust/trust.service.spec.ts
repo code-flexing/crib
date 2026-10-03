@@ -1,8 +1,37 @@
 import { describe, expect, it, vi } from 'vitest';
-import { computeUserVerificationStage, TrustService } from './trust.service.js';
+import { Logger } from '@nestjs/common';
+import {
+  computeProviderRecommendationScore,
+  computeUserVerificationStage,
+  TrustService,
+} from './trust.service.js';
 import type { PrismaService } from '../../infra/prisma/prisma.service.js';
 
 describe('computeUserVerificationStage', () => {
+  it('does not require student verification for agents', () => {
+    const result = computeUserVerificationStage({
+      userId: 'agent_1',
+      role: 'AGENT',
+      identityVerified: true,
+      providerPageVerified: false,
+      studentProfileApproved: false,
+    });
+
+    expect(result.criteria.map((criterion) => criterion.key)).toEqual(['identity', 'provider', 'followers', 'trust']);
+    expect(result.criteria.some((criterion) => criterion.key === 'student')).toBe(false);
+  });
+
+  it('includes student verification only for student accounts', () => {
+    const result = computeUserVerificationStage({
+      userId: 'student_1',
+      role: 'STUDENT',
+      identityVerified: true,
+      studentProfileApproved: false,
+    });
+
+    expect(result.criteria.map((criterion) => criterion.key)).toEqual(['identity', 'student', 'followers']);
+  });
+
   it('promotes a fully verified agent to the provider badge', () => {
     const result = computeUserVerificationStage({
       userId: 'user_1',
@@ -11,6 +40,7 @@ describe('computeUserVerificationStage', () => {
       trustScore: 78,
       providerPageVerified: true,
       studentProfileApproved: false,
+      followerCount: 10,
       confirmedFraudCount: 0,
       recentFraudCount: 0,
       flaggedForReview: false,
@@ -29,6 +59,7 @@ describe('computeUserVerificationStage', () => {
       trustScore: 92,
       providerPageVerified: true,
       studentProfileApproved: false,
+      followerCount: 10,
       confirmedFraudCount: 0,
       recentFraudCount: 0,
       flaggedForReview: false,
@@ -47,6 +78,7 @@ describe('computeUserVerificationStage', () => {
       trustScore: 90,
       providerPageVerified: true,
       studentProfileApproved: false,
+      followerCount: 10,
       confirmedFraudCount: 2,
       recentFraudCount: 2,
       flaggedForReview: true,
@@ -54,6 +86,45 @@ describe('computeUserVerificationStage', () => {
 
     expect(result.riskBlocked).toBe(true);
     expect(result.stage).toBe('PROFILE_VERIFIED');
+  });
+});
+
+describe('computeProviderRecommendationScore', () => {
+  it('increases discovery score with trust, active days, and student recommendations', () => {
+    const baseline = computeProviderRecommendationScore({ trustScore: 50, activeDays: 0, recommendationCount: 0 });
+    const improved = computeProviderRecommendationScore({ trustScore: 70, activeDays: 10, recommendationCount: 5 });
+
+    expect(improved).toBeGreaterThan(baseline);
+    expect(computeProviderRecommendationScore({ trustScore: 120, activeDays: 50, recommendationCount: 100 })).toBe(100);
+  });
+});
+
+describe('TrustService provider trust scores', () => {
+  it('does not derive a trust score from historical student booking events', async () => {
+    const userUpdate = vi.fn().mockResolvedValue({});
+    const trustEvents = { findMany: vi.fn() };
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          role: 'STUDENT',
+          trustScore: 54,
+          trustScoreUpdatedAt: new Date(),
+          _count: { trustEvents: 2 },
+        }),
+        update: userUpdate,
+      },
+      trustEvent: trustEvents,
+    } as unknown as PrismaService;
+    const service = new TrustService(prisma, { add: vi.fn() } as never);
+
+    const result = await service.getTrustScore('student_1');
+
+    expect(result.score).toBeNull();
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'student_1' },
+      data: { trustScore: null, trustScoreUpdatedAt: null },
+    });
+    expect(trustEvents.findMany).not.toHaveBeenCalled();
   });
 });
 
@@ -75,6 +146,7 @@ describe('TrustService verification badge emails', () => {
             stage: 'PROFILE_VERIFIED',
             identityVerified: true,
           },
+          _count: { followers: 10 },
         }),
       },
       fraudReport: { count: vi.fn().mockResolvedValue(0) },
@@ -120,8 +192,10 @@ describe('TrustService verification badge emails', () => {
             stage: 'AGENT_VERIFIED',
             identityVerified: true,
           },
+          _count: { followers: 10 },
         }),
       },
+      _count: { followers: 10 },
       fraudReport: { count: vi.fn().mockResolvedValue(0) },
       userVerification: { upsert: vi.fn().mockResolvedValue({}) },
     } as unknown as PrismaService;
@@ -153,6 +227,7 @@ describe('TrustService verification badge emails', () => {
           providerPage: { verificationState: 'VERIFIED' },
           studentProfile: null,
           verification: null,
+          _count: { followers: 10 },
         }),
       },
       fraudReport: { count: vi.fn().mockResolvedValue(0) },
@@ -171,5 +246,46 @@ describe('TrustService verification badge emails', () => {
 
     expect(userVerification.upsert.mock.calls[0][0].create.trustScore).toBe(79);
     expect(userVerification.upsert.mock.calls[0][0].update.trustScore).toBe(79);
+  });
+
+  it('returns the computed badge when persisting the verification snapshot fails', async () => {
+    const logger = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'user_7',
+          email: 'provider@example.com',
+          displayName: 'A Provider',
+          role: 'AGENT',
+          identityVerified: true,
+          trustScore: 78,
+          providerPage: { verificationState: 'VERIFIED' },
+          studentProfile: null,
+          verification: null,
+          _count: { followers: 10 },
+        }),
+      },
+      fraudReport: { count: vi.fn().mockResolvedValue(0) },
+      userVerification: { upsert: vi.fn().mockRejectedValue(new Error('snapshot table unavailable')) },
+    } as unknown as PrismaService;
+    const service = new TrustService(prisma, { add: vi.fn().mockResolvedValue(undefined) } as never);
+    vi.spyOn(service, 'getTrustScore').mockResolvedValue({
+      score: 78,
+      breakdown: {},
+      flaggedForReview: false,
+      lastUpdated: new Date(),
+      eventCount: 0,
+    });
+
+    await expect(service.getVerificationStage('user_7')).resolves.toMatchObject({
+      stage: 'AGENT_VERIFIED',
+      badge: 'BLUE_SHIELD',
+      badgeColor: 'blue',
+    });
+    expect(logger).toHaveBeenCalledWith(
+      expect.stringContaining('Unable to persist verification stage for user user_7'),
+      expect.any(String),
+    );
+    logger.mockRestore();
   });
 });

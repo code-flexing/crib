@@ -45,6 +45,7 @@ const criterionLabels: Record<string, string> = {
   provider: "Provider verification",
   student: "Student verification",
   trust: "Trust score threshold",
+  followers: "Followers",
 };
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -93,7 +94,7 @@ export function VerificationBadge({ verification, compact = false, iconOnly = fa
     <span
       title={`${config.label}${verification.riskBlocked ? ". Advanced badge upgrade is blocked for review." : ""}`}
       aria-label={`${config.label}${verification.riskBlocked ? ", risk review required" : ""}`}
-      className={`inline-flex w-fit items-center gap-2 border font-semibold ${config.tone} ${iconOnly ? "p-1.5" : compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"}`}
+      className={`inline-flex w-fit items-center gap-2 rounded-full border font-semibold ${config.tone} ${iconOnly ? "p-1.5" : compact ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm"}`}
     >
       <svg aria-hidden="true" viewBox="0 0 20 20" className={`shrink-0 ${compact ? "h-3.5 w-3.5" : "h-4 w-4"}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         {verification.stage === "PROFILE_VERIFIED" && <path d="m4 10 4 4 8-9" />}

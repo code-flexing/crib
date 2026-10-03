@@ -1,4 +1,5 @@
 export type TrustEventType =
+  | 'BOOKING_SECURED'
   | 'BOOKING_COMPLETED'
   | 'DISPUTE_RESOLVED_AGAINST'
   | 'DISPUTE_RESOLVED_FOR'
@@ -14,12 +15,13 @@ export interface TrustEvent {
 }
 
 export interface TrustScoreResult {
-  score: number;
+  score: number | null;
   breakdown: Record<string, number>;
   flaggedForReview: boolean;
 }
 
 const DEFAULT_WEIGHTS: Record<TrustEventType, number> = {
+  BOOKING_SECURED: 20,
   IDENTITY_VERIFIED: 15,
   BOOKING_COMPLETED: 20,
   REVIEW_RECEIVED: 10,
@@ -32,8 +34,6 @@ const DECAY_HALF_LIFE_MS = 180 * 24 * 60 * 60 * 1000;
 
 const MIN_SCORE = 0;
 const MAX_SCORE = 100;
-const NEUTRAL_SCORE = 50;
-
 function recencyWeight(occurredAt: Date, now: Date): number {
   const ageMs = now.getTime() - occurredAt.getTime();
   if (ageMs < 0) return 0;
@@ -46,19 +46,20 @@ export function computeTrustScore(
 ): TrustScoreResult {
   const breakdown: Record<string, number> = {};
   let total = 0;
+  const hasSecuredAccommodation = events.some(
+    (event) => event.type === 'BOOKING_SECURED' || event.type === 'BOOKING_COMPLETED',
+  );
 
   const categorySums: Record<string, { sum: number; count: number; values: number[] }> = {};
 
   for (const event of events) {
+    if (event.type === 'IDENTITY_VERIFIED' || event.type === 'REVIEW_RECEIVED' || event.type === 'DISPUTE_RESOLVED_FOR') {
+      continue;
+    }
     const baseWeight = event.weight > 0 ? event.weight : DEFAULT_WEIGHTS[event.type];
     const recency = recencyWeight(event.occurredAt, now);
 
     let effectiveWeight = baseWeight * recency;
-
-    if (event.type === 'REVIEW_RECEIVED' && event.reviewerTrustFactor !== undefined) {
-      const rtf = Math.max(0, Math.min(1, event.reviewerTrustFactor));
-      effectiveWeight *= rtf;
-    }
 
     const category = event.type;
     if (!categorySums[category]) {
@@ -74,12 +75,14 @@ export function computeTrustScore(
 
   const MAX_EXPECTED_WEIGHT = 200;
   const normalized = total / MAX_EXPECTED_WEIGHT;
-  const score = Math.max(MIN_SCORE, Math.min(MAX_SCORE, NEUTRAL_SCORE + normalized * NEUTRAL_SCORE));
+  const score = hasSecuredAccommodation
+    ? Math.max(MIN_SCORE, Math.min(MAX_SCORE, normalized * MAX_SCORE))
+    : null;
 
   const { flaggedForReview } = computeVarianceAndFlags(categorySums);
 
   return {
-    score: Math.round(score),
+    score: score === null ? null : Math.round(score),
     breakdown,
     flaggedForReview: flaggedForReview || hasRecentDispute(events, now),
   };

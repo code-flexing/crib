@@ -10,9 +10,9 @@ import { RestrictedActionModal } from "@/components/dashboard/RestrictedActionMo
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { Button } from "@/components/ui/Button";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { apiFetch, cachedApiFetch, cachedCurrentUser, displayName, getAuthenticatedDisplayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, primeCurrentUserCache, resolveMediaUrl, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
+import { apiFetch, cachedApiFetch, cachedCurrentUser, clearClientCache, displayName, getAuthenticatedDisplayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, primeCurrentUserCache, resolveMediaUrl, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
 
-type Listing = { id: string; ownerId?: string; title?: string; description?: string; price?: number; address?: string; campus?: string; photos?: string[]; images?: string[] };
+type Listing = { id: string; ownerId?: string; title?: string; description?: string; price?: number; address?: string; campus?: string; photos?: string[]; images?: string[]; likeCount?: number; viewCount?: number; followedPage?: boolean; likedByCurrentUser?: boolean; providerRecommendationCount?: number; providerTrustScore?: number | null; providerActiveDays?: number; recommendationScore?: number };
 type Profile = { id?: string; displayName?: unknown; email?: string; role?: string; profilePicture?: string; studentProfileStatus?: unknown; studentProfile?: { profilePicture?: string }; verificationStage?: unknown };
 type StudentProfile = { profilePicture?: string } | null;
 type ProviderPage = { id?: string; status?: string; profilePicture?: string; rejectionReason?: string; reason?: string } | null;
@@ -40,6 +40,9 @@ export default function DashboardPage() {
   const [pageStatus, setPageStatus] = useState<PageStatus>("none");
   const [listings, setListings] = useState<Listing[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
+  const [recommendedProviderIds, setRecommendedProviderIds] = useState<string[]>([]);
+  const [recommendationsLoaded, setRecommendationsLoaded] = useState(false);
+  const [pendingEngagement, setPendingEngagement] = useState<Set<string>>(() => new Set());
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [openSupportCount, setOpenSupportCount] = useState(0);
@@ -51,7 +54,10 @@ export default function DashboardPage() {
     }
 
     const cachedProfile = getCachedCurrentUser<Profile>();
-    if (cachedProfile) setProfile({ ...cachedProfile, displayName: resolveAccountName(cachedProfile) });
+    if (cachedProfile) {
+      setProfile({ ...cachedProfile, displayName: resolveAccountName(cachedProfile) });
+      setVerification(normalizeVerificationStage(cachedProfile.verificationStage));
+    }
     else {
       const tokenName = getAuthenticatedDisplayName();
       if (tokenName) setProfile({ displayName: tokenName });
@@ -61,26 +67,50 @@ export default function DashboardPage() {
       let user = currentUser;
       if (!displayName(user)) user = { ...user, displayName: resolveAccountName(user) };
       primeCurrentUserCache(user);
+      setProfile({ ...user, displayName: displayName(user) || getAuthenticatedDisplayName() });
+      const currentStage = normalizeVerificationStage(user.verificationStage);
+      if (currentStage) setVerification(currentStage);
       const role = String(user.role ?? "").toUpperCase();
+      if (["AGENT", "LANDLORD"].includes(role) && user.id) {
+        const today = new Date().toISOString().slice(0, 10);
+        const activityKey = `safecrib-provider-active-day:${user.id}`;
+        if (localStorage.getItem(activityKey) !== today) {
+          void apiFetch("/api/v1/trust/me/activity", { method: "POST" })
+            .then(() => localStorage.setItem(activityKey, today))
+            .catch(() => setActionMessage("We could not record today’s activity. Please refresh to retry."));
+        }
+      }
       const studentMode = role === "STUDENT";
       const verificationRequest = ["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)
         ? cachedApiFetch<unknown>("/api/v1/trust/me/verification-stage")
             .then(normalizeVerificationStage)
-            .catch(() => normalizeVerificationStage(user.verificationStage))
+            .catch(() => null)
         : Promise.resolve(null);
-      const [verificationStage, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations] = await Promise.all([
-        verificationRequest,
+      void verificationRequest.then((stage) => {
+        if (stage) setVerification(stage);
+      });
+      const [studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, recommendations] = await Promise.all([
         studentMode ? cachedApiFetch<StudentProfile>("/api/v1/student-profiles/me").catch(() => null) : Promise.resolve(null),
         studentMode ? cachedApiFetch<unknown>("/api/v1/student-profiles/status").catch(() => null) : Promise.resolve(null),
         cachedApiFetch<ProviderPage>("/api/v1/provider-pages/me").catch(() => null),
         cachedApiFetch<Listing[]>("/api/v1/listings").catch(() => []),
         role === "STUDENT" ? cachedApiFetch<Listing[]>("/api/v1/listings/bookmarks").catch(() => []) : Promise.resolve([]),
         cachedApiFetch<unknown>("/api/v1/support/conversations").catch(() => []),
+        role === "STUDENT"
+          ? cachedApiFetch<string[]>("/api/v1/trust/me/recommendations")
+              .then((value) => {
+                setRecommendationsLoaded(true);
+                return value;
+              })
+              .catch((error: unknown) => {
+                setActionMessage(error instanceof Error ? error.message : "We could not load your recommendations.");
+                return [];
+              })
+          : Promise.resolve([]),
       ]);
-      return { user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, verificationStage };
-    }).then(async ({ user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, verificationStage }) => {
+      return { user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, recommendations };
+    }).then(async ({ user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, recommendations }) => {
       setProfile({ ...user, displayName: displayName(user) || getAuthenticatedDisplayName() });
-      setVerification(verificationStage);
       const role = String(user.role ?? "").toUpperCase();
       const profileStatus = typeof user.studentProfileStatus === "object" && user.studentProfileStatus !== null && "status" in user.studentProfileStatus
         ? user.studentProfileStatus.status
@@ -93,6 +123,7 @@ export default function DashboardPage() {
       setPageStatus(normalizePageStatus(providerPage?.status));
       setListings(Array.isArray(homes) ? homes : []);
       setBookmarkedIds(Array.isArray(bookmarks) ? bookmarks.map((listing) => listing.id) : []);
+      setRecommendedProviderIds(Array.isArray(recommendations) ? recommendations : []);
       const conversationList = Array.isArray(conversations) ? conversations : [];
       setOpenSupportCount(conversationList.filter((conversation) => typeof conversation === "object" && conversation !== null && "status" in conversation && String(conversation.status).toUpperCase() === "OPEN").length);
     }).catch((loadError: unknown) => {
@@ -126,6 +157,61 @@ export default function DashboardPage() {
     }
   };
 
+  const toggleLike = async (listing: Listing) => {
+    const actionKey = `like:${listing.id}`;
+    if (pendingEngagement.has(actionKey)) return;
+    const liked = listing.likedByCurrentUser === true;
+    setPendingEngagement((current) => new Set(current).add(actionKey));
+    try {
+      await apiFetch(`/api/v1/listings/${encodeURIComponent(listing.id)}/like`, { method: liked ? "DELETE" : "POST" });
+      setListings((current) => current.map((item) => item.id === listing.id
+        ? { ...item, likedByCurrentUser: !liked, likeCount: Math.max(0, (item.likeCount ?? 0) + (liked ? -1 : 1)) }
+        : item));
+    } catch {
+      setActionMessage("We could not update your like. Please try again.");
+    } finally {
+      setPendingEngagement((current) => {
+        const next = new Set(current);
+        next.delete(actionKey);
+        return next;
+      });
+    }
+  };
+
+  const toggleRecommendation = async (providerId: string) => {
+    const actionKey = `recommend:${providerId}`;
+    if (pendingEngagement.has(actionKey)) return;
+    const recommended = recommendedProviderIds.includes(providerId);
+    setPendingEngagement((current) => new Set(current).add(actionKey));
+    try {
+      await apiFetch(`/api/v1/trust/users/${encodeURIComponent(providerId)}/recommendation`, { method: recommended ? "DELETE" : "POST" });
+      clearClientCache("/api/v1/listings", "/api/v1/trust/me/recommendations");
+      setRecommendedProviderIds((current) => recommended
+        ? current.filter((id) => id !== providerId)
+        : [...current, providerId]);
+      setListings((current) => current.map((item) => {
+        if (item.ownerId !== providerId) return item;
+        const recommendationCount = Math.max(0, (item.providerRecommendationCount ?? 0) + (recommended ? -1 : 1));
+        const trust = Math.max(0, Math.min(100, item.providerTrustScore ?? 50));
+        const activeDays = Math.max(0, Math.min(30, item.providerActiveDays ?? 0));
+        const recommendationSignal = Math.min(100, Math.log1p(recommendationCount) / Math.log1p(50) * 100);
+        return {
+          ...item,
+          providerRecommendationCount: recommendationCount,
+          recommendationScore: Math.round(trust * 0.45 + activeDays / 30 * 25 + recommendationSignal * 0.3),
+        };
+      }).sort((a, b) => (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0)));
+    } catch {
+      setActionMessage("We could not update your recommendation. Please try again.");
+    } finally {
+      setPendingEngagement((current) => {
+        const next = new Set(current);
+        next.delete(actionKey);
+        return next;
+      });
+    }
+  };
+
   const openPage = () => router.push(pageStatus === "none" ? "/page/new" : "/page");
   const accountName = resolveAccountName(profile);
   return (
@@ -142,6 +228,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-4 text-sm font-medium">
+            <Link href="/connect" className="text-safecrib-green hover:underline">Connect with your campus mates</Link>
             {["UNVERIFIED", "STUDENT"].includes(String(profile?.role ?? "").toUpperCase()) && accountStatus === "not_submitted" && <Link href="/profile/complete" className="text-safecrib-green hover:underline">Complete student profile</Link>}
             {["UNVERIFIED", "STUDENT"].includes(String(profile?.role ?? "").toUpperCase()) && accountStatus === "rejected" && <Link href="/profile/complete" className="text-safecrib-green hover:underline">Update rejected profile</Link>}
             <Link href={pageStatus === "none" ? "/page/new" : "/page"} className="text-safecrib-green hover:underline">{pageStatus === "none" ? "Create a provider Page" : "View my Page"}</Link>
@@ -159,10 +246,27 @@ export default function DashboardPage() {
                 <p className="mt-2 line-clamp-2 text-sm leading-6 text-black/60">{listing.description ?? "View this home for more details."}</p>
                 <p className="mt-4 font-medium text-safecrib-black">{typeof listing.price === "number" ? `₦${listing.price.toLocaleString()}` : "Price available in details"}</p>
                 <p className="mt-1 text-xs text-black/50">{listing.address ?? listing.campus ?? "Location available in details"}</p>
+                <p className="mt-2 text-xs text-black/45">{listing.viewCount ?? 0} views · {listing.likeCount ?? 0} likes</p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   <Link href={`/dashboard/listings/${listing.id}`} className="rounded-[3px] bg-safecrib-green px-4 py-2.5 text-sm font-medium text-safecrib-white hover:bg-[#0a5f47]">View details</Link>
                   {listing.ownerId && <Link href={`/profile/${encodeURIComponent(listing.ownerId)}`} className="rounded-[3px] border border-black/15 px-4 py-2.5 text-sm font-medium text-black/65 hover:bg-black/[0.03]">View provider</Link>}
                   {["UNVERIFIED", "STUDENT"].includes(String(profile?.role ?? "").toUpperCase()) && <Button type="button" variant="secondary" className="px-4 py-2.5 text-sm" onClick={() => void toggleBookmark(listing.id)}>{bookmarkedIds.includes(listing.id) ? "Saved" : "Save"}</Button>}
+                </div>
+                <div className="mt-4 flex items-center justify-between border-t border-black/10 pt-3">
+                  <button type="button" onClick={() => void toggleLike(listing)} disabled={listing.ownerId === profile?.id || pendingEngagement.has(`like:${listing.id}`)} aria-pressed={listing.likedByCurrentUser === true} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-black/65 transition hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-50">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Zm0 11h9.2a3 3 0 0 0 2.9-2.2l2-7A3 3 0 0 0 18.2 8H14l.7-3.2A2.4 2.4 0 0 0 12.4 2L7 10v11Z" /></svg>
+                    <span>{listing.likeCount ?? 0}</span>
+                    <span className="sr-only">Like home</span>
+                  </button>
+                  <Link href={`/dashboard/listings/${listing.id}#comments`} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-black/65 transition hover:bg-black/[0.04]">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8A8.5 8.5 0 0 1 8.7 3.9a8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z" /></svg>
+                    <span className="sr-only">Comment on home</span>
+                  </Link>
+                  <button type="button" onClick={() => listing.ownerId && void toggleRecommendation(listing.ownerId)} disabled={!listing.ownerId || String(profile?.role ?? "").toUpperCase() !== "STUDENT" || !recommendationsLoaded || listing.ownerId === profile?.id || pendingEngagement.has(`recommend:${listing.ownerId}`)} aria-pressed={Boolean(listing.ownerId && recommendedProviderIds.includes(listing.ownerId))} title={String(profile?.role ?? "").toUpperCase() === "STUDENT" ? "Recommend this provider to students" : "Student accounts can recommend providers"} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-black/65 transition hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-50">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m13 2-3 8h7l-6 12 2-9H6l7-11Z" /></svg>
+                    <span>{listing.providerRecommendationCount ?? 0}</span>
+                    <span className="sr-only">Recommend provider</span>
+                  </button>
                 </div>
               </div>
             </article>;

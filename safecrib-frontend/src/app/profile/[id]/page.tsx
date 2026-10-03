@@ -8,7 +8,7 @@ import { PageLoader } from "@/components/loading/PageLoader";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { apiFetch, cachedApiFetch, clearSession, getCachedCurrentUser, isUnauthorizedError, resolveMediaUrl, subscribeClientCacheUpdates, unwrapData } from "@/lib/api";
+import { apiFetch, cachedApiFetch, clearSession, getCachedCurrentUser, getPersistedVerification, isUnauthorizedError, resolveMediaUrl, setPersistedVerification, subscribeClientCacheUpdates, unwrapData } from "@/lib/api";
 
 type Listing = {
   id: string;
@@ -80,8 +80,9 @@ export default function PublicProfilePage() {
   const profileId = params.id;
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [verification, setVerification] = useState<VerificationStageResult | null>(null);
-  const [verificationError, setVerificationError] = useState("");
+  const [verification, setVerification] = useState<VerificationStageResult | null>(() =>
+    normalizeVerificationStage(getPersistedVerification(profileId)),
+  );
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [followPending, setFollowPending] = useState(false);
@@ -109,7 +110,8 @@ export default function PublicProfilePage() {
           if (active) setAvatarUrl(pictureUrl);
         });
       } else if (path === verificationPath) {
-        setVerification(normalizeVerificationStage(value));
+        const stage = normalizeVerificationStage(value);
+        if (stage) setVerification(stage);
       }
     });
     void cachedApiFetch<unknown>(publicProfilePath)
@@ -135,10 +137,14 @@ export default function PublicProfilePage() {
       });
 
     void cachedApiFetch<unknown>(verificationPath)
-      .then(normalizeVerificationStage)
-      .then((verificationStage) => { if (active) setVerification(verificationStage); })
+      .then((response) => {
+        const verificationStage = normalizeVerificationStage(response);
+        if (verificationStage) setPersistedVerification(profileId, response);
+        return verificationStage;
+      })
+      .then((verificationStage) => { if (active && verificationStage) setVerification(verificationStage); })
       .catch((verificationLoadError: unknown) => {
-        if (active) setVerificationError(verificationLoadError instanceof Error ? verificationLoadError.message : "Verification badge could not be loaded.");
+        void verificationLoadError;
       });
     return () => { active = false; unsubscribeCache(); };
   }, [profileId, router]);
@@ -216,11 +222,9 @@ export default function PublicProfilePage() {
                   <button type="button" disabled={followPending} onClick={() => void toggleFollow("user")} className={`rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50 ${profile.isFollowingUser ? "border border-black/15 text-black/65" : "bg-safecrib-green text-white"}`}>{profile.isFollowingUser ? "Following" : "Follow"}</button>
                   {profile.providerPageId && <button type="button" disabled={followPending} onClick={() => void toggleFollow("page")} className={`rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50 ${profile.isFollowingPage ? "border border-black/15 text-black/65" : "bg-safecrib-green text-white"}`}>{profile.isFollowingPage ? "Page followed" : "Follow page"} · {profile.providerPageFollowerCount ?? 0}</button>}
                 </div>
-                {profile.identityVerified && <span className="mb-1 inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">Identity verified</span>}
               </div>
             </section>
 
-            {verificationError && <p role="status" className="mt-4 text-sm text-amber-800">Verification badge temporarily unavailable.</p>}
             {followError && <p role="alert" className="mt-4 text-sm text-red-700">{followError}</p>}
 
             {profile.publicEngagement && <section className="mt-6 grid gap-3 sm:grid-cols-2" aria-label="Public provider engagement">

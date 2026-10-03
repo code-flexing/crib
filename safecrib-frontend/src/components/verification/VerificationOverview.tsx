@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, apiFetch, cachedApiFetch, getCurrentUser, primeCurrentUserCache, unwrapData } from "@/lib/api";
+import { ApiError, apiFetch, cachedApiFetch, getCachedCurrentUser, getCurrentUser, getPersistedVerification, primeCurrentUserCache, setPersistedVerification, unwrapData } from "@/lib/api";
 import { criterionLabel, normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
 
 type Identity = { id?: string; identityVerified?: boolean; role?: string; trustScore?: number; verificationStage?: unknown };
@@ -24,7 +24,10 @@ function identityState(identity: Identity, verification: VerificationStageResult
 }
 
 export function VerificationOverview() {
-  const [verification, setVerification] = useState<VerificationStageResult | null>(null);
+  const [verification, setVerification] = useState<VerificationStageResult | null>(() => {
+    const userId = getCachedCurrentUser<Identity>()?.id;
+    return normalizeVerificationStage(getPersistedVerification(userId));
+  });
   const [trustScore, setTrustScore] = useState<number | null>(null);
   const [identityVerified, setIdentityVerified] = useState<boolean | null>(null);
   const [providerStatus, setProviderStatus] = useState<string | null>(null);
@@ -39,7 +42,6 @@ export function VerificationOverview() {
     setError("");
     setDiscoveryError("");
     setEligible(null);
-    setVerification(null);
     let identity: Identity;
     try {
       const currentIdentity = await getCurrentUser<Identity>();
@@ -93,6 +95,7 @@ export function VerificationOverview() {
     }
 
     setVerification(stage);
+  setPersistedVerification(identity.id, stageResult.value);
     if (scoreResult.status === "fulfilled") setTrustScore(getTrustScore(scoreResult.value));
     setIdentityVerified(identityState(identity, stage));
     if (typeof identity.trustScore === "number") setTrustScore(identity.trustScore);

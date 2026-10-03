@@ -9,12 +9,12 @@ import { PageLoader } from "@/components/loading/PageLoader";
 import { Button } from "@/components/ui/Button";
 import { ReviewPendingState } from "@/components/verification/ReviewPendingState";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { ApiError, apiFetch, displayName, getCurrentUser, normalizeAccountStatus, normalizePageStatus, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
+import { ApiError, apiFetch, displayName, getCurrentUser, getPersistedVerification, normalizeAccountStatus, normalizePageStatus, setPersistedVerification, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
 
 type ProviderPageData = { id?: string; displayName?: string; status?: string; verificationNotes?: string; rejectionReason?: string; reason?: string } | null;
 type ListingPhoto = string | { url?: string; mediaId?: string };
 type Listing = { id: string; title?: string; description?: string; status?: string; price?: number; discountAmount?: number; discountedPrice?: number; address?: string; campus?: string; photos?: ListingPhoto[]; video?: { mediaId?: string } | null; updatedAt?: string; createdAt?: string };
-type User = { role?: string; displayName?: unknown; email?: string; verificationStage?: unknown };
+type User = { id?: string; role?: string; displayName?: unknown; email?: string; verificationStage?: unknown };
 
 function statusLabel(status?: string) {
   return (status || "UNKNOWN").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -50,15 +50,18 @@ export default function ProviderWorkspacePage() {
       setUser(currentUser);
       setProviderPage(page);
       const role = String(currentUser.role ?? "").toUpperCase();
+      setVerification(normalizeVerificationStage(getPersistedVerification(currentUser.id)));
       if (["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)) {
         void apiFetch<unknown>("/api/v1/trust/me/verification-stage")
           .then((response) => {
             const stage = normalizeVerificationStage(response);
-            setVerification(stage);
+            if (stage) {
+              setPersistedVerification(currentUser.id, response);
+              setVerification(stage);
+            }
           })
           .catch(() => {
-            setVerification(null);
-            setError("We could not load your verification badge.");
+            if (!getPersistedVerification(currentUser.id)) setError("We could not load your verification badge.");
           });
       }
       let currentStudentStatus: AccountStatus = "not_submitted";

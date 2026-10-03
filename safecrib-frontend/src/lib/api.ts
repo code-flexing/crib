@@ -186,6 +186,25 @@ export function primeCurrentUserCache(user: unknown) {
   writeClientCache("/api/v1/auth/me", user);
 }
 
+const persistedVerificationPrefix = "safecrib_verification:";
+
+export function getPersistedVerification<T>(userId?: string) {
+  if (typeof window === "undefined" || !userId) return null;
+  try {
+    const value = localStorage.getItem(`${persistedVerificationPrefix}${encodeURIComponent(userId)}`);
+    return value ? JSON.parse(value) as T : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setPersistedVerification(userId: string | undefined, value: unknown) {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    localStorage.setItem(`${persistedVerificationPrefix}${encodeURIComponent(userId)}`, JSON.stringify(value));
+  } catch { /* Storage may be unavailable or full. */ }
+}
+
 const pendingUploadPrefix = "safecrib_pending_upload:";
 
 function uploadFingerprint(file: File) {

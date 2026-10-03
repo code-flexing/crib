@@ -10,7 +10,7 @@ import { RestrictedActionModal } from "@/components/dashboard/RestrictedActionMo
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { apiFetch, cachedApiFetch, normalizeAccountStatus, normalizePageStatus, resolveMediaUrl, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
+import { apiFetch, cachedApiFetch, getPersistedVerification, normalizeAccountStatus, normalizePageStatus, resolveMediaUrl, setPersistedVerification, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
 
 type Listing = { id: string; ownerId?: string; title?: string; description?: string; price?: number; discountAmount?: number; discountedPrice?: number; address?: string; campus?: string; lat?: number; lng?: number; locationReference?: string; photos?: (string | { url?: string })[]; images?: string[]; video?: { mediaId?: string; url?: string } | null; providerId?: string; providerPageId?: string; likeCount?: number; viewCount?: number; likedByCurrentUser?: boolean; providerRecommendationCount?: number; provider?: { id?: string; displayName?: string; email?: string } };
 type Profile = { id?: string; role?: string; studentProfileStatus?: unknown };
@@ -85,11 +85,19 @@ export default function ListingDetailPage() {
         .then((response) => setComments(unwrapData<ListingComment[]>(response)))
         .catch(() => setCommentError("We could not load home comments. Please refresh to retry."));
       if (home.ownerId) {
-        void cachedApiFetch<unknown>(`/api/v1/trust/users/${encodeURIComponent(home.ownerId)}/verification-stage`)
-          .then((response) => setProviderVerification(normalizeVerificationStage(response)))
+        const verificationPath = `/api/v1/trust/users/${encodeURIComponent(home.ownerId)}/verification-stage`;
+        setProviderVerification(normalizeVerificationStage(getPersistedVerification(home.ownerId)));
+        void cachedApiFetch<unknown>(verificationPath)
+          .then((response) => {
+            const stage = normalizeVerificationStage(response);
+            if (stage) setPersistedVerification(home.ownerId, response);
+            if (stage) setProviderVerification(stage);
+          })
           .catch(() => {
-            setProviderVerification(null);
-            setProviderBadgeUnavailable(true);
+            if (!getPersistedVerification(home.ownerId)) {
+              setProviderVerification(null);
+              setProviderBadgeUnavailable(true);
+            }
           });
       }
       const accountRole = String(user.role ?? "").toUpperCase();

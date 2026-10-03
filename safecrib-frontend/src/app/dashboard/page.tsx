@@ -11,7 +11,7 @@ import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { apiFetch, cachedApiFetch, cachedCurrentUser, clearClientCache, displayName, getAuthenticatedDisplayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, primeCurrentUserCache, resolveMediaUrl, subscribeClientCacheUpdates, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
+import { apiFetch, cachedApiFetch, cachedCurrentUser, clearClientCache, displayName, getAuthenticatedDisplayName, getCachedCurrentUser, getPersistedVerification, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, primeCurrentUserCache, resolveMediaUrl, setPersistedVerification, subscribeClientCacheUpdates, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
 
 type Listing = { id: string; ownerId?: string; title?: string; description?: string; price?: number; address?: string; campus?: string; photos?: string[]; images?: string[]; likeCount?: number; viewCount?: number; followedPage?: boolean; likedByCurrentUser?: boolean; providerRecommendationCount?: number; providerTrustScore?: number | null; providerActiveDays?: number; recommendationScore?: number };
 type Profile = { id?: string; displayName?: unknown; email?: string; role?: string; profilePicture?: string; studentProfileStatus?: unknown; studentProfile?: { profilePicture?: string }; verificationStage?: unknown };
@@ -57,7 +57,7 @@ export default function DashboardPage() {
         setAccountStatus(normalizeAccountStatus(currentUser.studentProfileStatus));
       }
       const picture = currentUser.profilePicture ?? currentUser.studentProfile?.profilePicture;
-      if (picture) void resolveMediaUrl(picture).then(setProfileImage);
+      if (picture) void resolveMediaUrl(picture).then((url) => { if (url) setProfileImage(url); });
       return;
     }
 
@@ -65,7 +65,7 @@ export default function DashboardPage() {
       const student = unwrapData<StudentProfile>(value);
       const currentUser = getCachedCurrentUser<Profile>();
       const picture = currentUser?.profilePicture ?? student?.profilePicture;
-      if (picture) void resolveMediaUrl(picture).then(setProfileImage);
+      if (picture) void resolveMediaUrl(picture).then((url) => { if (url) setProfileImage(url); });
       return;
     }
 
@@ -74,7 +74,7 @@ export default function DashboardPage() {
       setPageStatus(normalizePageStatus(page?.status));
       const currentUser = getCachedCurrentUser<Profile>();
       const picture = currentUser?.profilePicture ?? page?.profilePicture;
-      if (picture) void resolveMediaUrl(picture).then(setProfileImage);
+      if (picture) void resolveMediaUrl(picture).then((url) => { if (url) setProfileImage(url); });
       return;
     }
 
@@ -114,6 +114,7 @@ export default function DashboardPage() {
     const cachedProfile = getCachedCurrentUser<Profile>();
     if (cachedProfile) {
       setProfile({ ...cachedProfile, displayName: resolveAccountName(cachedProfile) });
+      setVerification(normalizeVerificationStage(getPersistedVerification(cachedProfile.id)));
     }
     else {
       const tokenName = getAuthenticatedDisplayName();
@@ -126,6 +127,7 @@ export default function DashboardPage() {
       primeCurrentUserCache(user);
       setProfile({ ...user, displayName: displayName(user) || getAuthenticatedDisplayName() });
       const role = String(user.role ?? "").toUpperCase();
+      setVerification((current) => current ?? normalizeVerificationStage(getPersistedVerification(user.id)));
       if (["AGENT", "LANDLORD"].includes(role) && user.id) {
         const today = new Date().toISOString().slice(0, 10);
         const activityKey = `safecrib-provider-active-day:${user.id}`;
@@ -144,11 +146,15 @@ export default function DashboardPage() {
         : Promise.resolve(null);
       const verificationRequest = ["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)
         ? apiFetch<unknown>("/api/v1/trust/me/verification-stage")
-            .then(normalizeVerificationStage)
+            .then((response) => {
+              const stage = normalizeVerificationStage(response);
+              if (stage) setPersistedVerification(user.id, response);
+              return stage;
+            })
             .catch(() => null)
         : Promise.resolve(null);
       void verificationRequest.then((stage) => {
-        setVerification(stage);
+        if (stage) setVerification(stage);
       });
       const [studentProfile, providerPage, homes, bookmarks, conversations, recommendations] = await Promise.all([
         studentMode ? cachedApiFetch<StudentProfile>("/api/v1/student-profiles/me").catch(() => null) : Promise.resolve(null),

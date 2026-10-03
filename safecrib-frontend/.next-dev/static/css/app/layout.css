@@ -502,6 +502,39 @@ video {
 [hidden]:where(:not([hidden="until-found"])) {
   display: none;
 }
+.container {
+  width: 100%;
+}
+@media (min-width: 640px) {
+
+  .container {
+    max-width: 640px;
+  }
+}
+@media (min-width: 768px) {
+
+  .container {
+    max-width: 768px;
+  }
+}
+@media (min-width: 1024px) {
+
+  .container {
+    max-width: 1024px;
+  }
+}
+@media (min-width: 1280px) {
+
+  .container {
+    max-width: 1280px;
+  }
+}
+@media (min-width: 1536px) {
+
+  .container {
+    max-width: 1536px;
+  }
+}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -565,6 +598,12 @@ video {
 }
 .top-2 {
   top: 0.5rem;
+}
+.left-3\.5 {
+  left: 0.875rem;
+}
+.top-1\/2 {
+  top: 50%;
 }
 .z-10 {
   z-index: 10;
@@ -941,6 +980,10 @@ video {
 }
 .translate-y-2 {
   --tw-translate-y: 0.5rem;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+.-translate-y-1\/2 {
+  --tw-translate-y: -50%;
   transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 }
 .-rotate-45 {
@@ -1671,6 +1714,9 @@ video {
 }
 .pt-8 {
   padding-top: 2rem;
+}
+.pl-11 {
+  padding-left: 2.75rem;
 }
 .text-left {
   text-align: left;
@@ -2839,6 +2885,10 @@ html[data-theme="dark"] .safecrib-back-home:hover {
   border-color: rgb(12 115 85 / var(--tw-border-opacity, 1));
 }
 
+.hover\:border-safecrib-green\/25:hover {
+  border-color: rgb(12 115 85 / 0.25);
+}
+
 .hover\:bg-\[\#095E47\]:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(9 94 71 / var(--tw-bg-opacity, 1));
@@ -3072,6 +3122,10 @@ html[data-theme="dark"] .safecrib-back-home:hover {
 
   .sm\:min-w-0 {
     min-width: 0px;
+  }
+
+  .sm\:max-w-sm {
+    max-width: 24rem;
   }
 
   .sm\:shrink {
@@ -3415,6 +3469,10 @@ html[data-theme="dark"] .safecrib-back-home:hover {
 
   .lg\:grid-cols-\[minmax\(0\2c 1fr\)_23rem\] {
     grid-template-columns: minmax(0,1fr) 23rem;
+  }
+
+  .lg\:grid-cols-1 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
   }
 
   .lg\:items-start {

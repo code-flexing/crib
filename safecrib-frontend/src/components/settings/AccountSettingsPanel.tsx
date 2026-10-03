@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { ApiError, apiFetch, cachedApiFetch, cachedCurrentUser, primeCurrentUserCache, resolveMediaUrl, subscribeClientCacheUpdates, unwrapData, uploadDocument } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
@@ -25,6 +25,7 @@ export function AccountSettingsPanel({ heading = "Account details" }: { heading?
   const [nameSaving, setNameSaving] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const avatarPreviewUrl = useRef<string | null>(null);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -40,7 +41,9 @@ export function AccountSettingsPanel({ heading = "Account details" }: { heading?
       setAccount(currentAccount);
       setDisplayName(nameFrom(currentAccount.displayName));
       if (currentAccount.profilePicture) {
-        void resolveMediaUrl(currentAccount.profilePicture).then(setAvatarUrl);
+        void resolveMediaUrl(currentAccount.profilePicture).then((url) => {
+          if (url) setAvatarUrl(url);
+        });
       }
     });
     void cachedCurrentUser<Account>().then(async (currentAccount) => {
@@ -58,7 +61,10 @@ export function AccountSettingsPanel({ heading = "Account details" }: { heading?
     }).catch((loadError: unknown) => {
       setError(loadError instanceof Error ? loadError.message : "We could not load account settings.");
     });
-    return unsubscribeCache;
+    return () => {
+      unsubscribeCache();
+      if (avatarPreviewUrl.current) URL.revokeObjectURL(avatarPreviewUrl.current);
+    };
   }, []);
 
   const updateProfilePicture = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -78,6 +84,11 @@ export function AccountSettingsPanel({ heading = "Account details" }: { heading?
     setAvatarSaving(true);
     setError("");
     setNotice("");
+    const previousAvatar = avatarUrl;
+    const previewUrl = URL.createObjectURL(file);
+    if (avatarPreviewUrl.current) URL.revokeObjectURL(avatarPreviewUrl.current);
+    avatarPreviewUrl.current = previewUrl;
+    setAvatarUrl(previewUrl);
     try {
       const profilePicture = await uploadDocument(file, "AVATAR");
       const response = await apiFetch<unknown>("/api/v1/users/me", {
@@ -88,9 +99,17 @@ export function AccountSettingsPanel({ heading = "Account details" }: { heading?
       const nextAccount = { ...account, ...updated, profilePicture: updated?.profilePicture ?? profilePicture };
       setAccount(nextAccount);
       primeCurrentUserCache(nextAccount);
-      setAvatarUrl(await resolveMediaUrl(nextAccount.profilePicture));
+      const resolvedAvatar = await resolveMediaUrl(nextAccount.profilePicture);
+      if (resolvedAvatar) {
+        setAvatarUrl(resolvedAvatar);
+        URL.revokeObjectURL(previewUrl);
+        avatarPreviewUrl.current = null;
+      }
       setNotice("Profile photo updated.");
     } catch (uploadError) {
+      setAvatarUrl(previousAvatar);
+      URL.revokeObjectURL(previewUrl);
+      avatarPreviewUrl.current = null;
       setError(uploadError instanceof Error ? uploadError.message : "We could not update your profile photo.");
     } finally {
       setAvatarSaving(false);

@@ -9,7 +9,7 @@ import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { PageLoader } from "@/components/loading/PageLoader";
 import { BackHomeLink } from "@/components/ui/BackHomeLink";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { apiFetch, cachedApiFetch, cachedCurrentUser, clearSession, displayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, resolveMediaUrl, subscribeClientCacheUpdates, unwrapData } from "@/lib/api";
+import { apiFetch, cachedApiFetch, cachedCurrentUser, clearSession, displayName, getCachedCurrentUser, getPersistedVerification, isUnauthorizedError, normalizeAccountStatus, resolveMediaUrl, setPersistedVerification, subscribeClientCacheUpdates, unwrapData } from "@/lib/api";
 
 type User = {
   id?: string;
@@ -143,7 +143,9 @@ export default function ProfilePage() {
       if (currentUser) {
         setUser(currentUser);
         if (currentUser.profilePicture) {
-          void resolveMediaUrl(currentUser.profilePicture).then(setAvatarUrl);
+          void resolveMediaUrl(currentUser.profilePicture).then((url) => {
+            if (url) setAvatarUrl(url);
+          });
         }
       }
       return;
@@ -181,6 +183,7 @@ export default function ProfilePage() {
     const cachedUser = getCachedCurrentUser<User>();
     if (cachedUser) {
       setUser(cachedUser);
+      setVerification(normalizeVerificationStage(getPersistedVerification(cachedUser.id)));
       setLoading(false);
     }
 
@@ -189,13 +192,18 @@ export default function ProfilePage() {
       if (!active) return;
       setUser(currentUser);
       const role = String(currentUser.role ?? "").toUpperCase();
+      setVerification((current) => current ?? normalizeVerificationStage(getPersistedVerification(currentUser.id)));
       const verificationRequest = ["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)
         ? apiFetch<unknown>("/api/v1/trust/me/verification-stage")
-            .then(normalizeVerificationStage)
+            .then((response) => {
+              const stage = normalizeVerificationStage(response);
+              if (stage) setPersistedVerification(currentUser.id, response);
+              return stage;
+            })
             .catch(() => null)
         : Promise.resolve(null);
       void verificationRequest.then((stage) => {
-        if (active) setVerification(stage);
+        if (active && stage) setVerification(stage);
       });
       const isStudent = ["UNVERIFIED", "STUDENT"].includes(role);
       const isProvider = ["AGENT", "LANDLORD"].includes(role);

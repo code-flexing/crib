@@ -15,15 +15,16 @@ import {
   ApiError,
   apiFetch,
   cachedApiFetch,
-  cachedCurrentUser,
   cancelPendingUpload,
   clearClientCache,
   clearPendingUploads,
   getPendingUpload,
   getPendingUploads,
+  getCurrentUser,
   isUnauthorizedError,
   normalizeAccountStatus,
   normalizePageStatus,
+  primeCurrentUserCache,
   uploadDocument,
   type AccountStatus,
   type PageStatus,
@@ -343,15 +344,15 @@ export default function CompleteStudentProfilePage() {
     }
 
     void Promise.all([
-      cachedCurrentUser<User>(),
+      getCurrentUser<User>(),
 
       cachedApiFetch<StudentProfile | null>(
         "/api/v1/student-profiles/me"
       ).catch(() => null),
 
-      cachedApiFetch<unknown>(
+      apiFetch<unknown>(
         "/api/v1/student-profiles/status"
-      ).catch(() => null),
+      ).then(unwrapData<unknown>).catch(() => null),
 
       cachedApiFetch<{ status?: string }>(
         "/api/v1/provider-pages/me"
@@ -364,6 +365,8 @@ export default function CompleteStudentProfilePage() {
           statusResponse,
           page,
         ]) => {
+          clearClientCache("/api/v1/student-profiles/status");
+          primeCurrentUserCache(user);
           const currentDraftKey =
             profileDraftKey(user);
 
@@ -373,17 +376,7 @@ export default function CompleteStudentProfilePage() {
             );
 
           const rawStatus =
-            typeof user.studentProfileStatus ===
-              "object" &&
-            user.studentProfileStatus !== null &&
-            "status" in user.studentProfileStatus
-              ? user.studentProfileStatus.status
-              : statusResponse &&
-                  typeof statusResponse ===
-                    "object" &&
-                  "status" in statusResponse
-                ? statusResponse.status
-                : statusResponse;
+            statusResponse ?? user.studentProfileStatus;
 
           setStatus(
             normalizeAccountStatus(rawStatus)
@@ -462,6 +455,49 @@ export default function CompleteStudentProfilePage() {
         setDraftHydrated(true);
       });
   }, [router]);
+
+  useEffect(() => {
+    if (draftHydrated && status === "approved") {
+      router.replace("/dashboard");
+    }
+  }, [draftHydrated, router, status]);
+
+  useEffect(() => {
+    if (!draftHydrated || status !== "pending") return;
+
+    let checkingStatus = false;
+    const refreshStatus = async () => {
+      if (checkingStatus || document.visibilityState === "hidden") return;
+      checkingStatus = true;
+      try {
+        const response = unwrapData<unknown>(
+          await apiFetch<unknown>("/api/v1/student-profiles/status"),
+        );
+        const latestStatus = normalizeAccountStatus(response);
+        if (latestStatus !== "pending") {
+          clearClientCache(
+            "/api/v1/student-profiles/status",
+            "/api/v1/users/me",
+            "/api/v1/auth/me",
+          );
+          setStatus(latestStatus);
+        }
+      } catch {
+        // Keep the pending state if a temporary status check fails.
+      } finally {
+        checkingStatus = false;
+      }
+    };
+
+    window.addEventListener("focus", refreshStatus);
+    document.addEventListener("visibilitychange", refreshStatus);
+    const interval = window.setInterval(refreshStatus, 30_000);
+    return () => {
+      window.removeEventListener("focus", refreshStatus);
+      document.removeEventListener("visibilitychange", refreshStatus);
+      window.clearInterval(interval);
+    };
+  }, [draftHydrated, status]);
 
   useEffect(() => {
     if (

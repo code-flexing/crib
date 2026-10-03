@@ -10,7 +10,7 @@ import { RestrictedActionModal } from "@/components/dashboard/RestrictedActionMo
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { Button } from "@/components/ui/Button";
 import { normalizeVerificationStage, VerificationBadge, type VerificationStageResult } from "@/components/verification/VerificationBadge";
-import { apiFetch, cachedApiFetch, cachedCurrentUser, clearClientCache, displayName, getAuthenticatedDisplayName, getCachedCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, primeCurrentUserCache, resolveMediaUrl, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
+import { apiFetch, cachedApiFetch, clearClientCache, displayName, getAuthenticatedDisplayName, getCachedCurrentUser, getCurrentUser, isUnauthorizedError, normalizeAccountStatus, normalizePageStatus, primeCurrentUserCache, resolveMediaUrl, unwrapData, type AccountStatus, type PageStatus } from "@/lib/api";
 
 type Listing = { id: string; ownerId?: string; title?: string; description?: string; price?: number; address?: string; campus?: string; photos?: string[]; images?: string[]; likeCount?: number; viewCount?: number; followedPage?: boolean; likedByCurrentUser?: boolean; providerRecommendationCount?: number; providerTrustScore?: number | null; providerActiveDays?: number; recommendationScore?: number };
 type Profile = { id?: string; displayName?: unknown; email?: string; role?: string; profilePicture?: string; studentProfileStatus?: unknown; studentProfile?: { profilePicture?: string }; verificationStage?: unknown };
@@ -63,7 +63,7 @@ export default function DashboardPage() {
       if (tokenName) setProfile({ displayName: tokenName });
     }
 
-    void cachedCurrentUser<Profile>().then(async (currentUser) => {
+    void getCurrentUser<Profile>().then(async (currentUser) => {
       let user = currentUser;
       if (!displayName(user)) user = { ...user, displayName: resolveAccountName(user) };
       primeCurrentUserCache(user);
@@ -80,7 +80,7 @@ export default function DashboardPage() {
             .catch(() => setActionMessage("We could not record today’s activity. Please refresh to retry."));
         }
       }
-      const studentMode = role === "STUDENT";
+      const studentMode = ["STUDENT", "UNVERIFIED"].includes(role);
       const verificationRequest = ["STUDENT", "AGENT", "LANDLORD", "ADMIN"].includes(role)
         ? cachedApiFetch<unknown>("/api/v1/trust/me/verification-stage")
             .then(normalizeVerificationStage)
@@ -91,7 +91,7 @@ export default function DashboardPage() {
       });
       const [studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, recommendations] = await Promise.all([
         studentMode ? cachedApiFetch<StudentProfile>("/api/v1/student-profiles/me").catch(() => null) : Promise.resolve(null),
-        studentMode ? cachedApiFetch<unknown>("/api/v1/student-profiles/status").catch(() => null) : Promise.resolve(null),
+        studentMode ? apiFetch<unknown>("/api/v1/student-profiles/status").then(unwrapData<unknown>).catch(() => null) : Promise.resolve(null),
         cachedApiFetch<ProviderPage>("/api/v1/provider-pages/me").catch(() => null),
         cachedApiFetch<Listing[]>("/api/v1/listings").catch(() => []),
         role === "STUDENT" ? cachedApiFetch<Listing[]>("/api/v1/listings/bookmarks").catch(() => []) : Promise.resolve([]),
@@ -108,13 +108,12 @@ export default function DashboardPage() {
               })
           : Promise.resolve([]),
       ]);
+              if (studentStatus !== null) clearClientCache("/api/v1/student-profiles/status");
       return { user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, recommendations };
     }).then(async ({ user, studentProfile, studentStatus, providerPage, homes, bookmarks, conversations, recommendations }) => {
       setProfile({ ...user, displayName: displayName(user) || getAuthenticatedDisplayName() });
       const role = String(user.role ?? "").toUpperCase();
-      const profileStatus = typeof user.studentProfileStatus === "object" && user.studentProfileStatus !== null && "status" in user.studentProfileStatus
-        ? user.studentProfileStatus.status
-        : studentStatus && typeof studentStatus === "object" && "status" in studentStatus ? studentStatus.status : studentStatus;
+      const profileStatus = studentStatus ?? user.studentProfileStatus;
       const providerVerified = ["AGENT", "LANDLORD"].includes(role) && String(providerPage?.status ?? "").toUpperCase() === "VERIFIED";
       const studentProfileData = unwrapData<StudentProfile>(studentProfile);
       const pictureReference = user.profilePicture ?? user.studentProfile?.profilePicture ?? studentProfileData?.profilePicture ?? providerPage?.profilePicture;
@@ -141,6 +140,38 @@ export default function DashboardPage() {
       setBookmarkedIds([]);
     });
   }, [router]);
+
+  useEffect(() => {
+    if (accountStatus !== "pending" || !["STUDENT", "UNVERIFIED"].includes(String(profile?.role ?? "").toUpperCase())) return;
+
+    let checkingStatus = false;
+    const refreshStatus = async () => {
+      if (checkingStatus || document.visibilityState === "hidden") return;
+      checkingStatus = true;
+      try {
+        const response = unwrapData<unknown>(
+          await apiFetch<unknown>("/api/v1/student-profiles/status"),
+        );
+        if (normalizeAccountStatus(response) !== "pending") {
+          clearClientCache();
+          window.location.reload();
+        }
+      } catch {
+        // Keep the current dashboard state if a temporary status check fails.
+      } finally {
+        checkingStatus = false;
+      }
+    };
+
+    window.addEventListener("focus", refreshStatus);
+    document.addEventListener("visibilitychange", refreshStatus);
+    const interval = window.setInterval(refreshStatus, 30_000);
+    return () => {
+      window.removeEventListener("focus", refreshStatus);
+      document.removeEventListener("visibilitychange", refreshStatus);
+      window.clearInterval(interval);
+    };
+  }, [accountStatus, profile?.role]);
 
   const toggleBookmark = async (listingId: string) => {
     const isSaved = bookmarkedIds.includes(listingId);

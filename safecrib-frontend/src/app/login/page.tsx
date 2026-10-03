@@ -214,7 +214,6 @@ export default function LoginPage() {
                   {showPassword ? "Hide" : "Show"}
                 </button>
               </div>
-              <button type="button" className="mt-3 text-sm font-medium text-safecrib-green">Forgot password?</button>
             </div>
           )}
 
